@@ -1,0 +1,103 @@
+# ITIP-[xx]
+*Using template v0.1*
+## Abstract
+We want to be able to increase the trade size for FLI products while maintaining a low target level of slippage. Increasing the trade size allows for FLI products to delever faster and take on greater amounts of capital while not compromising on the saefty of the product. Additionally, larger trade sizes cut down on the operating expenses of maintaining FLI products by reducing the amount of transactions necessary to rebalance.
+## Motivation
+This feature/upgrade looks to increase the max trade size for FLI products while maintaining the same slippage tolerance. This helps Index Cooperative achieve two main goals:
+1. Safely scale FLI products to higher AUM levels
+2. Reduce costs of maintaining FLI products, especially in volatile periods, by reducing the amount of transactions necessary to rebalance the product
+
+Safety for FLI products can be defined by how fast a product is able to delever during periods of high volatility. One of the biggest factors determining the delever rate is how much of the AUM of the FLI can be traded within one transaction which can be defined as: `TS/AUM`, where `TS = max trade size` and `AUM = asset under management`. By increasing the max trade size we increase the delever rate thus providing a higher level of safety.  
+
+Targeting max trade size has a follow on benefit of reducing maintenance costs. Another way of increasing safety could be to increase the frequency of rebalance transactions, however this incurs additional maintenance costs as more transaction are required for maintenance. By increasing the max trade size we can reduce the amount of required rebalance transactions while still achieving similar levels of safety.
+
+This feature needs to be able to work for any instance a rebalance needs to be called for FLI products. That means it must be sufficient for day-to-day operations of FLI as well as during periods of high volatility. Additionally this feature must be easily parameterizable by the Index Cooperative and not be able to be exploited by malicious actors looking to use rebalance transactions for their own benefit. We want to allow keepers the ability to submit trades deemed acceptable (if not essentially the best) while eliminating the ability to execute bad trades.
+
+## Background Information
+The current iteration of the FLI rebalance strategy, as encoded in the [`FLIStrategyAdapter`](https://github.com/SetProtocol/index-coop-smart-contracts/blob/3b8e8af3391cd4d118baa81fc8920bbe14e76087/contracts/adapters/FlexibleLeverageStrategyAdapter.sol) allows for execution on only one exchange, which can be picked from available AMM-exchange adapters enabled by Set Protocol: `SushiswapExchangeAdapter`, `UniswapV2ExchangeAdapterV2`. There is additional work underway to implement two exchange adapters that may be of great use to FLI products, `UniswapV3ExchangeAdapter` ([PR](https://github.com/SetProtocol/set-protocol-v2/pull/96)) and a TradeSplitter contract ([STIP](https://github.com/SetProtocol/STIPS/pull/5)).
+
+In general, there are two ways to increase the trade size for for a rebalance transaction:
+1. Execute trades on an exchange that has deeper liquidity
+2. Split trades across multiple exchanges
+
+These new adapters in development provide the possibility of being able to do both, tapping into the the deeper liquidity pools of UniswapV3 and/or splitting trades across multiple exchanges. Digging into how these two adapters will work can help inform how we can build around them:
+
+1. The `UniswapV3ExchangeAdapter` is fairly self-explanatory, it will interact with the UniswapV3 Router and execute trades across it's various liquidity pools. One difference of note is that UniswapV3 requires choosing a fee tier to execute in (since the same asset pair can have multiple pools just with different tiers), so when parameterizing UniswapV3 trades the fee tier will need to be included in the exchange data.
+2. The `TradeSplitter` will split between `UniswapV2` and `Sushiswap`, so there will be exposure to liquidity across both of those exchanges. Since it is still WIP it's unclear any specific parameterization requirements the `TradeSplitter` will need.
+
+It's important to note that exchanges perform quite differently depending on the environment. Anecdotally the various exchanges break down in the following way:
+
+| Exchange  	| Stable Market   	| High Volatility 	| Trustlessness 	| Notes                                                                                                	|
+|-----------	|-----------------	|-----------------	|---------------	|------------------------------------------------------------------------------------------------------	|
+| UniswapV3 	| Highly liquid   	| Low/Med Liquid  	| High          	| During very volatile environments price moves away from liquidity and may not be adjusted            	|
+| UniswapV2 	| Med Liquid      	| Med Liquid      	| High          	| Due to algorithm remains very stable regardless of environment. Most reliable.                       	|
+| Sushiswap 	| Med Liquid      	| Med Liquid      	| High          	| Due to algorithm remains very stable regardless of environment. Most reliable.                       	|
+| 0x        	| High/Med Liquid 	| Med Liquid      	| Med           	| Pulls from other exchanges so lower bound on liquidity. High vol means less liquidity on PMM network 	|
+
+The ideal solution probably takes advantage of the strengths of each of these exchanges while limiting usage during times when they are not effective.
+
+## Open Questions
+- [ ] Are there any further guarantees we can give that the best trade will always be executed?
+- [ ] How do we deter being sandwich attacked?
+    - *Answer*
+## Feasibility Analysis
+Any solution needs to balance max trade size with reliability that the trade can succeed in all market types. The most resilient system needs to exhibit the following properties: 
+1. Be able to have trades executed across any exchange so that a trade is always available no matter the market environment 
+2. Not require batching of trades in one transaction in case one exchange reverts
+3. Deter malicious actors by enforcing slippage checks in case a certain exchange's liquidity dries up in a given market environment
+
+To that end, it makes sense to update rebalance logic in the FLIStrategyAdapter to allow any exchange to be used for execution, provided it has been parameterized by the Index Cooperative. This effectively operates as on-chain parameterization of trades but off-chain splitting and routing logic. Each exchange can be parameterized with it's own max trade size, slippage checks, and any other data necessary to interact with the exchange. Keepers can call the FLIStrategyAdapter passing in the exchange they wish execute the trade through. This should require only updates to the logic of the FLIStrategyAdapter and can be rolled out immediately. This strategy also has the effect of decreasing the time between rebalance transactions since we can put each exchange on it's own TWAP.
+
+## Timeline
+A proposed timeline for completion
+## Checkpoint 1
+Before more in depth design of the contract flows lets make sure that all the work done to this point has been exhaustive. It should be clear what we're doing, why, and for who. All necessary information on external protocols should be gathered and potential solutions considered. At this point we should be in alignment with product on the non-technical requirements for this feature. It is up to the reviewer to determine whether we move onto the next step.
+
+**Reviewer**:
+
+## Proposed Architecture Changes
+A diagram would be helpful here to see where new feature slot into the system. Additionally a brief description of any new contracts is helpful.
+## Requirements
+These should be a distillation of the previous two sections taking into account the decided upon high-level implementation. Each flow should have high level requirements taking into account the needs of participants in the flow (users, managers, market makers, app devs, etc) 
+## User Flows
+- Highlight *each* external flow enabled by this feature. It's helpful to use diagrams (add them to the `assets` folder). Examples can be very helpful, make sure to highlight *who* is initiating this flow, *when* and *why*. A reviewer should be able to pick out what requirements are being covered by this flow.
+## Checkpoint 2
+Before we spec out the contract(s) in depth we want to make sure that we are aligned on all the technical requirements and flows for contract interaction. Again the who, what, when, why should be clearly illuminated for each flow. It is up to the reviewer to determine whether we move onto the next step.
+
+**Reviewer**:
+
+Reviewer: []
+## Specification
+### [Contract Name]
+#### Inheritance
+- List inherited contracts
+#### Structs
+| Type 	| Name 	| Description 	|
+|------	|------	|-------------	|
+|address|manager|Address of the manager|
+|uint256|iterations|Number of times manager has called contract|  
+#### Constants
+| Type 	| Name 	| Description 	| Value 	|
+|------	|------	|-------------	|-------	|
+|uint256|ONE    | The number one| 1       	|
+#### Public Variables
+| Type 	| Name 	| Description 	|
+|------	|------	|-------------	|
+|uint256|hodlers|Number of holders of this token|
+#### Modifiers
+> onlyManager(SetToken _setToken)
+#### Functions
+> issue(SetToken _setToken, uint256 quantity) external
+- Pseudo code
+## Checkpoint 3
+Before we move onto the implementation phase we want to make sure that we are aligned on the spec. All contracts should be specced out, their state and external function signatures should be defined. For more complex contracts, internal function definition is preferred in order to align on proper abstractions. Reviewer should take care to make sure that all stake holders (product, app engineering) have their needs met in this stage.
+
+**Reviewer**:
+
+## Implementation
+[Link to implementation PR]()
+## Documentation
+[Link to Documentation on feature]()
+## Deployment
+[Link to Deployment script PR]()  
+[Link to Deploy outputs PR]()
