@@ -49,7 +49,14 @@ Any solution needs to balance max trade size with reliability that the trade can
 To that end, it makes sense to update rebalance logic in the FLIStrategyAdapter to allow any exchange to be used for execution, provided it has been parameterized by the Index Cooperative. This effectively operates as on-chain parameterization of trades but off-chain splitting and routing logic. Each exchange can be parameterized with it's own max trade size, slippage checks, and any other data necessary to interact with the exchange. Keepers can call the FLIStrategyAdapter passing in the exchange they wish execute the trade through. This should require only updates to the logic of the FLIStrategyAdapter and can be rolled out immediately. This strategy also has the effect of decreasing the time between rebalance transactions since we can put each exchange on it's own TWAP.
 
 ## Timeline
-A proposed timeline for completion
+- Spec + review: 4-5 days
+- Implementation: 4-5 days
+- Internal review: 2 days
+- Deployment scripts: 1 day
+- Deploy to testnet: 1 day
+- Testing: 3-5 days
+- Write docs: 1-2 days
+
 ## Checkpoint 1
 Before more in depth design of the contract flows lets make sure that all the work done to this point has been exhaustive. It should be clear what we're doing, why, and for who. All necessary information on external protocols should be gathered and potential solutions considered. At this point we should be in alignment with product on the non-technical requirements for this feature. It is up to the reviewer to determine whether we move onto the next step.
 
