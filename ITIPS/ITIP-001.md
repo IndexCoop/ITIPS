@@ -49,8 +49,8 @@ Any solution needs to balance max trade size with reliability that the trade can
 To that end, it makes sense to update rebalance logic in the FLIStrategyAdapter to allow any exchange to be used for execution, provided it has been parameterized by the Index Cooperative. This effectively operates as on-chain parameterization of trades but off-chain splitting and routing logic. Each exchange can be parameterized with it's own max trade size, slippage checks, and any other data necessary to interact with the exchange. Keepers can call the FLIStrategyAdapter passing in the exchange they wish execute the trade through. This should require only updates to the logic of the FLIStrategyAdapter and can be rolled out immediately. This strategy also has the effect of decreasing the time between rebalance transactions since we can put each exchange on it's own TWAP.
 
 ## Timeline
-- Spec + review: 4-5 days
-- Implementation: 4-5 days
+- Spec + review: 3 days
+- Implementation: 4-5 days (comprehensive integration tests will be necessary)
 - Internal review: 2 days
 - Deployment scripts: 1 day
 - Deploy to testnet: 1 day
@@ -60,14 +60,116 @@ To that end, it makes sense to update rebalance logic in the FLIStrategyAdapter 
 ## Checkpoint 1
 Before more in depth design of the contract flows lets make sure that all the work done to this point has been exhaustive. It should be clear what we're doing, why, and for who. All necessary information on external protocols should be gathered and potential solutions considered. At this point we should be in alignment with product on the non-technical requirements for this feature. It is up to the reviewer to determine whether we move onto the next step.
 
-**Reviewer**:
+**Reviewer**: @felix2feng and @richardliang on 10/11
 
 ## Proposed Architecture Changes
-A diagram would be helpful here to see where new feature slot into the system. Additionally a brief description of any new contracts is helpful.
+This update won't require re-architecting any part of our system though it will require some updates to logic, and a reintroduction of the FLIStrategyViewer contract which can be used to give keepers information on which exchange is the best to use. As a refresher this is the current architecture of the FLI Strategy system:
+
+![Current Architecture](/assets/ITIP-001/current-architecture.png)
+
+We don't currently use a FLIStrategyViewer since the Chainlink oracle upgrade, however here it makes sense to reintroduce it as a resource for keepers to receive information about the best on-chain quote.
+
 ## Requirements
-These should be a distillation of the previous two sections taking into account the decided upon high-level implementation. Each flow should have high level requirements taking into account the needs of participants in the flow (users, managers, market makers, app devs, etc) 
+- Must allow for execution across any parameterized exchange, each exchange should be parameterized with the following info
+    - Max trade size
+    - Lever exchange data
+    - Delever exchange data
+    - Incentivized max trade size
+- Each exchange should track it's own last trade timestamp
+- Adding a new exchange to execute on should be as simple as adding parameters, deploying a new contract should not be necessary
+- There should be some logic that is able to notify keepers of the exchange with the best on-chain quote
 ## User Flows
-- Highlight *each* external flow enabled by this feature. It's helpful to use diagrams (add them to the `assets` folder). Examples can be very helpful, make sure to highlight *who* is initiating this flow, *when* and *why*. A reviewer should be able to pick out what requirements are being covered by this flow.
+To start we will revisit the current rebalance flow:    
+### Current Rebalance Flow
+1. A keeper wants to rebalance the FLI which last rebalanced a day ago so calls `shouldRebalanceWithBounds` to know which function to call (in this case `rebalance`)
+2. The keeper calls `rebalance` passing in no parameters
+3. The current leverage ratio is calculated and all params are gathered for the rebalance including trade size
+4. Validate leverage ratio isn't above ripcord and that enough time has elapsed since lastTradeTimestamp (unless outside bounds)
+5. Validate not in TWAP
+6. Calculate new leverage ratio
+7. Calculate the total rebalance size and the chunk rebalance size, the chunk rebalance size is less than total rebalance size
+8. Create calldata for invoking lever/delever on CLM
+9. Log the last trade timestamp
+10. Set the twapLeverageRatio so that we don't have to recalculate the target leverage ratio again for this TWAP
+
+### Current Iterate Flow
+1. A keeper wants to rebalance the FLI which kicked off a TWAP rebalance a minute ago so calls `shouldRebalanceWithBounds` to know which function to call (in this case `rebalance`)
+2. The keeper calls `iterateRebalance` passing in no parameters
+3. The current leverage ratio is calculated and all params are gathered for the rebalance including trade size
+4. Validate leverage ratio isn't above ripcord and that enough time has elapsed since last lastTradeTimestamp 
+5. Validate TWAP is underway
+6. Calculate new leverage ratio
+7. Check that prices haven't moved making continuing rebalance unnecessary
+8. Calculate the total rebalance size and the chunk rebalance size, the chunk rebalance size equals total rebalance size
+9. Create calldata for invoking lever/delever on CLM
+10. Log the last trade timestamp
+11. Delete twapLeverageRatio since the TWAP is over
+
+### Current Ripcord Flow
+1. A keeper wants to rebalance the FLI in the middle of a falling market and calls `shouldRebalanceWithBounds` to know which function to call (in this case `ripcord`)
+2. The keeper calls `ripcord` passing in no parameters
+3. The current leverage ratio is calculated and all params are gathered for the rebalance including trade size
+4. Validate that leverage ratio outside bounds and that incentivized cool down period has elapsed from lastTradeTimestamp
+5. Calculate the notional amount of the chunk rebalance size
+6. Create calldata for invoking delever on CLM
+7. Log the last trade timestamp
+8. Delete twapLeverageRatio
+9. Transfer ether to keeper
+
+### Revised Rebalance Flow
+1. A keeper wants to rebalance the FLI which last rebalanced a day ago so calls a function on the FLIViewer that tells it to rebalance _and_ to route the trade through UniswapV3
+2. The keeper calls `rebalance` on the FLIStrategyAdapter passing in `UniswapV3ExchangeAdapter`
+3. The _exchange's_ max trade size is grabbed from storage
+4. Repeat steps 3-9 from original flow
+5. Log the _exchange_ last trade timestamp
+6. Set the twapLeverageRatio so that we don't have to recalculate the target leverage ratio again for this TWAP
+
+### Revised Iterate Flow
+1. A keeper wants to rebalance the FLI which kicked off a TWAP rebalance one block ago so calls a function on the FLIViewer that tells it to iterate _and_ to route the trade through Sushiswap since the cool down period hasn't elapsed for UniswapV3
+2. The keeper calls `iterateRebalance` passing in `SushiswapExchangeAdapter`
+3. The _exchange's_ max trade size and last trade timestamp are grabbed from storage
+4. Validate leverage ratio isn't above ripcord and that enough time has elapsed since _exchange's_ lastTradeTimestamp 
+4. Repeat steps 4-10 from original flow
+5. Log the _exchange_ last trade timestamp
+6. Delete twapLeverageRatio since the TWAP is over\
+
+### Revised Ripcord Flow
+1. A keeper wants to rebalance the FLI in the middle of a falling market and calls a function on the FLIViewer that tells it to ripcord _and_ to route the trade through `Sushiswap`
+2. The keeper calls `ripcord` passing in `SushiswapExchangeAdapter`
+3. The _exchange's_ incentivized max trade size and last trade timestamp are grabbed from storage
+3. The current leverage ratio is calculated and all params are gathered for the rebalance including _exchange's_ incentivized trade size
+4. Validate that leverage ratio outside bounds and that incentivized cool down period has elapsed from _exchange's_ lastTradeTimestamp
+5. Repeat steps 5-7
+6. Log the _exchange_ last trade timestamp
+7. Repeat steps 8-9
+
+### High-Level Data Structure Update
+- Add mapping of exchangeName => ExchangeSettings
+- Params removed from ExecutionSettings and put in ExchangeSettings
+    - twapMaxTradeSize
+    - exchangeName
+    - leverExchangeData
+    - deleverExchangeData
+- Params removed from IncentiveSettings and put in ExchangeSettings
+    - incentivizedTwapMaxTradeSize
+
+### Other functions changed or added
+- `engage()`
+- `disengage()`
+- `shouldRebalance`
+    - Returns ShouldRebalance enum and exchanges that can be used
+- `setExchangeSettings`
+    - Added to contract
+- `_validateSettings`
+
+### FLI Viewer
+1. A keeper wants to know the FLIStrategy function to call and the exchange to use so they call `getFLIFunctionAndExchange`
+2. Viewer calls shouldRebalance on FLIStrategyAdapter and receives function to call and list of exchanges that can be used
+3. FLIViewer iterates over each exchange doing following:
+    - Get parameterization for exchange from FLIStrategyAdapter
+    - [Get size of trade]
+    - Get quote from exchange
+
 ## Checkpoint 2
 Before we spec out the contract(s) in depth we want to make sure that we are aligned on all the technical requirements and flows for contract interaction. Again the who, what, when, why should be clearly illuminated for each flow. It is up to the reviewer to determine whether we move onto the next step.
 
