@@ -69,13 +69,17 @@ This update won't require re-architecting any part of our system though it will 
 
 We don't currently use a FLIStrategyViewer since the Chainlink oracle upgrade, however here it makes sense to reintroduce it as a resource for keepers to receive information about the best on-chain quote.
 
+Note: We will reintroduce it as a launch +1 item, as viewer contracts can be easily swapped out.
+
 ## Requirements
-- Must allow for execution across any parameterized exchange, each exchange should be parameterized with the following info
+- Must allow for execution across any parameterized exchange, each exchangeId should be parameterized with the following info
+    - Exchange name
     - Max trade size
     - Lever exchange data
     - Delever exchange data
     - Incentivized max trade size
-- Each exchange should track it's own last trade timestamp
+- We improve UX by using an uint of exchangeId rather than using the raw exchangeName
+- Each exchangeId should track it's own last trade timestamp
 - Adding a new exchange to execute on should be as simple as adding parameters, deploying a new contract should not be necessary
 - There should be some logic that is able to notify keepers of the exchange with the best on-chain quote
 ## User Flows
@@ -117,8 +121,8 @@ To start we will revisit the current rebalance flow:
 9. Transfer ether to keeper
 
 ### Revised Rebalance Flow
-1. A keeper wants to rebalance the FLI which last rebalanced a day ago so calls a function on the FLIViewer that tells it to rebalance _and_ to route the trade through UniswapV3
-2. The keeper calls `rebalance` on the FLIStrategyAdapter passing in `UniswapV3ExchangeAdapter`
+1. A keeper wants to rebalance the FLI which last rebalanced a day ago so calls a function on the FLIViewer that tells it to rebalance _and_ to route the trade through UniswapV3. Note: for initial release, we will not have the FLIViewer contract. It will purely be determined by an offchain algorithm (e.g. naive use Uniswap V3 during normal conditions, use both exchanges when > 2.3x leverage)
+2. The keeper calls `rebalance` on the FLIStrategyAdapter passing in `1` (`UniswapV3ExchangeAdapter`)
 3. The _exchange's_ max trade size is grabbed from storage
 4. Repeat steps 3-9 from original flow
 5. Log the _exchange_ last trade timestamp
@@ -126,7 +130,7 @@ To start we will revisit the current rebalance flow:
 
 ### Revised Iterate Flow
 1. A keeper wants to rebalance the FLI which kicked off a TWAP rebalance one block ago so calls a function on the FLIViewer that tells it to iterate _and_ to route the trade through Sushiswap since the cool down period hasn't elapsed for UniswapV3
-2. The keeper calls `iterateRebalance` passing in `SushiswapExchangeAdapter`
+2. The keeper calls `iterateRebalance` passing in `2` (`SushiswapExchangeAdapter`)
 3. The _exchange's_ max trade size and last trade timestamp are grabbed from storage
 4. Validate leverage ratio isn't above ripcord and that enough time has elapsed since _exchange's_ lastTradeTimestamp 
 4. Repeat steps 4-10 from original flow
@@ -135,7 +139,7 @@ To start we will revisit the current rebalance flow:
 
 ### Revised Ripcord Flow
 1. A keeper wants to rebalance the FLI in the middle of a falling market and calls a function on the FLIViewer that tells it to ripcord _and_ to route the trade through `Sushiswap`
-2. The keeper calls `ripcord` passing in `SushiswapExchangeAdapter`
+2. The keeper calls `ripcord` passing in `2` (`SushiswapExchangeAdapter`)
 3. The _exchange's_ incentivized max trade size and last trade timestamp are grabbed from storage
 3. The current leverage ratio is calculated and all params are gathered for the rebalance including _exchange's_ incentivized trade size
 4. Validate that leverage ratio outside bounds and that incentivized cool down period has elapsed from _exchange's_ lastTradeTimestamp
@@ -144,7 +148,7 @@ To start we will revisit the current rebalance flow:
 7. Repeat steps 8-9
 
 ### High-Level Data Structure Update
-- Add mapping of exchangeName => ExchangeSettings
+- Add mapping of exchangeId => ExchangeSettings. We use exchangeId as an UX improvement for the backend rather than the exchangeName string
 - Params removed from ExecutionSettings and put in ExchangeSettings
     - twapMaxTradeSize
     - exchangeName
@@ -157,12 +161,13 @@ To start we will revisit the current rebalance flow:
 - `engage()`
 - `disengage()`
 - `shouldRebalance`
-    - Returns ShouldRebalance enum and exchanges that can be used
+    - Returns ShouldRebalance enum
 - `setExchangeSettings`
     - Added to contract
 - `_validateSettings`
+    - Validates ExchangeSettings
 
-### FLI Viewer
+### FLI Viewer (_Launch +1 Release_)
 1. A keeper wants to know the FLIStrategy function to call and the exchange to use so they call `getFLIFunctionAndExchange`
 2. Viewer calls shouldRebalance on FLIStrategyAdapter and receives function to call and list of exchanges that can be used
 3. FLIViewer iterates over each exchange doing following:
