@@ -145,6 +145,7 @@ To start we will revisit the current rebalance flow:
 
 ### High-Level Data Structure Update
 - Add mapping of exchangeName => ExchangeSettings
+- Add `exchanges` array containing the approved exchanges
 - Params removed from ExecutionSettings and put in ExchangeSettings
     - twapMaxTradeSize
     - exchangeName
@@ -158,6 +159,7 @@ To start we will revisit the current rebalance flow:
 - `disengage()`
 - `shouldRebalance`
     - Returns ShouldRebalance enum and exchanges that can be used
+- `getTotalRebalanceNotional`
 - `setExchangeSettings`
     - Added to contract
 - `_validateSettings`
@@ -167,7 +169,7 @@ To start we will revisit the current rebalance flow:
 2. Viewer calls shouldRebalance on FLIStrategyAdapter and receives function to call and list of exchanges that can be used
 3. FLIViewer iterates over each exchange doing following:
     - Get parameterization for exchange from FLIStrategyAdapter
-    - [Get size of trade]
+    - Get size of rebalance trade
     - Get quote from exchange
 
 ## Checkpoint 2
