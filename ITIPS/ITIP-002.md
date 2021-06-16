@@ -30,6 +30,7 @@ Below is an audit of our current rebalance process for various products:
 ## Open Questions
 - [x] Can we generalize to use any oracle system other than Chainlink?
     - Yes, using the Set oracles adapter interface
+- [ ] Should oracles return the quote in ETH or in USD?
 
 ## Feasibility Analysis
 
@@ -60,6 +61,9 @@ Before more in depth design of the contract flows lets make sure that all the wo
 
 ## Proposed Architecture Changes
 A diagram would be helpful here to see where new feature slot into the system. Additionally a brief description of any new contracts is helpful.
+
+
+
 ## Requirements
 These should be a distillation of the previous two sections taking into account the decided upon high-level implementation. Each flow should have high level requirements taking into account the needs of participants in the flow (users, managers, market makers, app devs, etc) 
 ## User Flows
