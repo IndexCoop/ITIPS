@@ -160,6 +160,23 @@ To start we will revisit the current rebalance flow:
 - Iterate rebalance and ripcord rebalances that rely on cooldown periods should use the exchange specific lastTradeTimestamp
 - Update both exchange and global last trade timestamp to keep state consistent
 
+#### Table of Should Rebalance Conditions
+- Global timestamp will always equal one exchange's last trade timestamp. There will be no case where global timestamp is strictly less than any exchange's last trade timestamp
+    - In other words, if global timestamp elapsed is a YES then every exchange timestamp elapsed should be YES
+    - If an exchange timestamp is updated from any action, global will always be updated with the same value
+
+| Function     | Has elapsed since global last trade timestamp | Has elapsed since exchange 1 last trade timestamp | Has elapsed since exchange 2 last trade timestamp | Should rebalance |
+|-----------    |-----------------  |-----------------  |--------------- |--------------- |
+| Rebalance     | Yes     | Yes    | Yes    | Yes |
+| Rebalance     | No     | No    | Yes    | No |
+| Rebalance     | No     | No    | No    | No |
+| IterateRebalance     | Yes     | Yes    | Yes    | Yes |
+| IterateRebalance     | No     | No    | Yes    | Yes |
+| IterateRebalance     | No     | No    | No    | No |
+| Ripcord     | Yes     | Yes    | Yes    | Yes |
+| Ripcord     | No     | No    | Yes    | Yes |
+| Ripcord     | No     | No    | No    | No |
+
 ### Other functions changed or added
 - `engage()`
 - `disengage()`
@@ -170,7 +187,6 @@ To start we will revisit the current rebalance flow:
 - `setExchangeSettings`
     - Added to contract
 - `_shouldRebalance`
-    - Update to pass in exchange name
 - `getExchangeSettings`
 
 ### FLI Viewer (_Post Launch Release_)
@@ -183,7 +199,7 @@ To start we will revisit the current rebalance flow:
 
 ### Public Function Interface Changes
 - `shouldRebalance()` => `rebalance(string _exchangeName)`
-- `shouldRebalanceWithBounds(uint256 minLeverage, uint256 maxLeverage)` => `shouldRebalanceWithBounds(uint256 minLeverage, uint256 maxLeverage, string _exchangeName)`
+- `shouldRebalanceWithBounds(uint256 minLeverage, uint256 maxLeverage) returns ENUM` => `shouldRebalanceWithBounds(uint256 minLeverage, uint256 maxLeverage) returns (string[], ENUM[])`
 - `rebalance()` => `rebalance(string _exchangeName)`
 - `iterateRebalance()` => - `iterateRebalance(string _exchangeName)`
 - `ripcord()` => `ripcord(string _exchangeName)`
@@ -236,6 +252,7 @@ function rebalance(string memory _exchangeName) external onlyEOA onlyAllowedCall
 
     LeverageInfo memory leverageInfo = _getAndValidateLeveragedInfo(execution.slippageTolerance, exchangeSettings[_exchangeName].twapMaxTradeSize, _exchangeName);
 
+    // We limit rebalance to only be called once if within bounds so we use the global trade timestamp to prevent multiple exchanges from calling once each
     _validateNormalRebalance(leverageInfo, methodology.rebalanceInterval, globalLastTradeTimestamp);
     
     ...
@@ -252,6 +269,7 @@ function iterateRebalance(string memory _exchangeName) external onlyEOA onlyAllo
 
     LeverageInfo memory leverageInfo = _getAndValidateLeveragedInfo(execution.slippageTolerance, exchangeSettings[_exchangeName].twapMaxTradeSize, _exchangeName);
     
+    // We can use any exchange to iterate rebalances so we use the exchange specific last trade timestamp here
     _validateNormalRebalance(leverageInfo, execution.twapCooldownPeriod, executionSettings[_exchangeName].exchangeLastTradeTimestamp);
 
     ...
@@ -271,6 +289,7 @@ function ripcord(string memory _exchangeName) external onlyEOA onlyAllowedCaller
         _exchangeName
     );
 
+    // We can use any exchange to ripcord so we use the exchange specific last trade timestamp here
     _validateRipcord(leverageInfo, executionSettings[_exchangeName].exchangeLastTradeTimestamp);
 
     ...
@@ -494,32 +513,39 @@ function _validateSettings(MethodologySettings memory _methodology, ExecutionSet
 - maxLeverageRatio
 
 ```solidity
-function _shouldRebalance(uint256 _currentLeverageRatio, uint256 _minLeverageRatio, uint256 _maxLeverageRatio) internal pure {
+function _shouldRebalance(uint256 _currentLeverageRatio, uint256 _minLeverageRatio, uint256 _maxLeverageRatio) internal view returns (string[] memory, ShouldRebalance[] memory) {
+    ShouldRebalance[] shouldRebalanceEnums;
 
-    // If above ripcord threshold, then check if incentivized cooldown period has elapsed. Check 
-    if (_currentLeverageRatio >= incentive.incentivizedLeverageRatio) {
-        if (exchangeSettings[_exchangeName].exchangeLastTradeTimestamp.add(incentive.incentivizedTwapCooldownPeriod) < block.timestamp) {
-            return ShouldRebalance.RIPCORD;
-        }
-    } else {
-        // If TWAP, then check if the cooldown period has elapsed
-        if (twapLeverageRatio > 0) {
-            if (exchangeSettings[_exchangeName].exchangeLastTradeTimestamp.add(execution.twapCooldownPeriod) < block.timestamp) {
-                return ShouldRebalance.ITERATE_REBALANCE;
+    for (uint256 i = 0; i < enabledExchanges.length; i++) {
+        // If above ripcord threshold, then check if incentivized cooldown period has elapsed for the enabled exchange
+        if (_currentLeverageRatio >= incentive.incentivizedLeverageRatio) {
+            if (exchangeSettings[enabledExchanges[i]].exchangeLastTradeTimestamp.add(incentive.incentivizedTwapCooldownPeriod) < block.timestamp) {
+                shouldRebalanceEnums.push(ShouldRebalance.RIPCORD);
             }
         } else {
-            // If not TWAP, then check if the rebalance interval has elapsed OR current leverage is above max leverage OR current leverage is below
-            // min leverage
-            if (
-                block.timestamp.sub(globalLastTradeTimestamp) > methodology.rebalanceInterval
-                || _currentLeverageRatio > _maxLeverageRatio
-                || _currentLeverageRatio < _minLeverageRatio
-            ) {
-                return ShouldRebalance.REBALANCE;
+            // If TWAP, then check if the cooldown period has elapsed for the enabled exchange
+            if (twapLeverageRatio > 0) {
+                if (exchangeSettings[enabledExchanges[i]].exchangeLastTradeTimestamp.add(execution.twapCooldownPeriod) < block.timestamp) {
+                    shouldRebalanceEnums.push(ShouldRebalance.ITERATE_REBALANCE);
+                }
+            } else {
+                // If not TWAP, then check if the rebalance interval has elapsed OR current leverage is above max leverage OR current leverage is below
+                // min leverage for the GLOBAL timestamp to prevent multiple exchanges from calling when within bounds
+                if (
+                    block.timestamp.sub(globalLastTradeTimestamp) > methodology.rebalanceInterval
+                    || _currentLeverageRatio > _maxLeverageRatio
+                    || _currentLeverageRatio < _minLeverageRatio
+                ) {
+                    shouldRebalanceEnums.push(ShouldRebalance.REBALANCE);
+                }
             }
         }
+
+         // If none of the above conditions are satisfied, then should not rebalance
+        shouldRebalanceEnums.push(ShouldRebalance.NONE);
     }
 
+    return (enabledExchanges, shouldRebalanceEnums)
 }
 ```
 
@@ -543,6 +569,14 @@ function removeExchange(string memory _exchangeName) external onlyOperator noReb
     delete exchangeSettings[_exchangeName];
 
     enabledExchanges.remove(_exchangeName);
+}
+```
+
+> function getTotalRebalanceNotional()
+
+```solidity
+function getTotalRebalanceNotional() external view returns (uint256) {
+    // Either use existing internal functions or recreate logic that reduces unnecessary calls
 }
 ```
 
