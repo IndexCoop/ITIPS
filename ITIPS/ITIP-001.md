@@ -198,7 +198,7 @@ To start we will revisit the current rebalance flow:
     - Get quote from exchange
 
 ### Public Function Interface Changes
-- `shouldRebalance()` => `rebalance(string _exchangeName)`
+- `shouldRebalance() returns ENUM` => `shouldRebalance() returns (string[], ENUM[])`
 - `shouldRebalanceWithBounds(uint256 minLeverage, uint256 maxLeverage) returns ENUM` => `shouldRebalanceWithBounds(uint256 minLeverage, uint256 maxLeverage) returns (string[], ENUM[])`
 - `rebalance()` => `rebalance(string _exchangeName)`
 - `iterateRebalance()` => - `iterateRebalance(string _exchangeName)`
