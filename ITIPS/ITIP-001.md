@@ -122,7 +122,7 @@ To start we will revisit the current rebalance flow:
 
 ### Revised Rebalance Flow
 1. A keeper wants to rebalance the FLI which last rebalanced a day ago so calls a function on the FLIViewer that tells it to rebalance _and_ to route the trade through UniswapV3. Note: for initial release, we will not have the FLIViewer contract. It will purely be determined by an offchain algorithm (e.g. naive use Uniswap V3 during normal conditions, use both exchanges when > 2.3x leverage)
-2. The keeper calls `rebalance` on the FLIStrategyAdapter passing in `1` (`UniswapV3ExchangeAdapter`)
+2. The keeper calls `rebalance` on the FLIStrategyAdapter passing in `UniswapV3ExchangeAdapter`
 3. The _exchange's_ max trade size is grabbed from storage
 4. Repeat steps 3-9 from original flow
 5. Log the _exchange_ last trade timestamp
@@ -130,7 +130,7 @@ To start we will revisit the current rebalance flow:
 
 ### Revised Iterate Flow
 1. A keeper wants to rebalance the FLI which kicked off a TWAP rebalance one block ago so calls a function on the FLIViewer that tells it to iterate _and_ to route the trade through Sushiswap since the cool down period hasn't elapsed for UniswapV3
-2. The keeper calls `iterateRebalance` passing in `2` (`SushiswapExchangeAdapter`)
+2. The keeper calls `iterateRebalance` passing in `SushiswapExchangeAdapter`
 3. The _exchange's_ max trade size and last trade timestamp are grabbed from storage
 4. Validate leverage ratio isn't above ripcord and that enough time has elapsed since _exchange's_ lastTradeTimestamp 
 4. Repeat steps 4-10 from original flow
@@ -139,7 +139,7 @@ To start we will revisit the current rebalance flow:
 
 ### Revised Ripcord Flow
 1. A keeper wants to rebalance the FLI in the middle of a falling market and calls a function on the FLIViewer that tells it to ripcord _and_ to route the trade through `Sushiswap`
-2. The keeper calls `ripcord` passing in `2` (`SushiswapExchangeAdapter`)
+2. The keeper calls `ripcord` passing in SushiswapExchangeAdapter`
 3. The _exchange's_ incentivized max trade size and last trade timestamp are grabbed from storage
 3. The current leverage ratio is calculated and all params are gathered for the rebalance including _exchange's_ incentivized trade size
 4. Validate that leverage ratio outside bounds and that incentivized cool down period has elapsed from _exchange's_ lastTradeTimestamp
@@ -148,7 +148,7 @@ To start we will revisit the current rebalance flow:
 7. Repeat steps 8-9
 
 ### High-Level Data Structure Update
-- Add mapping of exchangeId => ExchangeSettings. We use exchangeId as an UX improvement for the backend rather than the exchangeName string
+- Mapping from exchangeName to ExchangeSettings. We will use this data structure even though strings cost more gas. This prevents cases when we can use different exchange settings for the same exchange. This also requires us to store an array of exchanges that are enabled. We are willing to make this tradeoff
 - Params removed from ExecutionSettings and put in ExchangeSettings
     - twapMaxTradeSize
     - exchangeName
