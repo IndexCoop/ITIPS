@@ -72,14 +72,14 @@ We don't currently use a FLIStrategyViewer since the Chainlink oracle upgrade, h
 Note: We will reintroduce it as a launch +1 item, as viewer contracts can be easily swapped out.
 
 ## Requirements
-- Must allow for execution across any parameterized exchange, each exchangeId should be parameterized with the following info
+- Must allow for execution across any parameterized exchange, each exchangeName should be parameterized with the following info
     - Exchange name
     - Max trade size
     - Lever exchange data
     - Delever exchange data
     - Incentivized max trade size
-- We improve UX by using an uint of exchangeId rather than using the raw exchangeName
-- Each exchangeId should track it's own last trade timestamp
+- Each exchange should track it's own last trade timestamp
+- During regular epoch rebalances, only one rebalance can be called
 - Adding a new exchange to execute on should be as simple as adding parameters, deploying a new contract should not be necessary
 - There should be some logic that is able to notify keepers of the exchange with the best on-chain quote
 ## User Flows
@@ -156,6 +156,9 @@ To start we will revisit the current rebalance flow:
     - deleverExchangeData
 - Params removed from IncentiveSettings and put in ExchangeSettings
     - incentivizedTwapMaxTradeSize
+- Replace all lastTradeTimestamps with globalLastTradeTimestamp for additional clarity
+- Iterate rebalance and ripcord rebalances that rely on cooldown periods should use the exchange specific lastTradeTimestamp
+- Update both exchange and global last trade timestamp to keep state consistent
 
 ### Other functions changed or added
 - `engage()`
@@ -163,10 +166,12 @@ To start we will revisit the current rebalance flow:
 - `shouldRebalance`
     - Returns ShouldRebalance enum and exchanges that can be used
 - `getTotalRebalanceNotional`
+    - Helper to get the expected total notional rebalance size
 - `setExchangeSettings`
     - Added to contract
-- `_validateSettings`
-    - Validates ExchangeSettings
+- `_shouldRebalance`
+    - Update to pass in exchange specific last trade timestamp
+- `getExchangeSettings`
 
 ### FLI Viewer (_Launch +1 Release_)
 1. A keeper wants to know the FLIStrategy function to call and the exchange to use so they call `getFLIFunctionAndExchange`
@@ -183,27 +188,319 @@ Before we spec out the contract(s) in depth we want to make sure that we are ali
 
 Reviewer: []
 ## Specification
-### [Contract Name]
+
+### `FlexibleLeverageStrategyAdapter`
 #### Inheritance
-- List inherited contracts
-#### Structs
-| Type 	| Name 	| Description 	|
-|------	|------	|-------------	|
-|address|manager|Address of the manager|
-|uint256|iterations|Number of times manager has called contract|  
-#### Constants
-| Type 	| Name 	| Description 	| Value 	|
-|------	|------	|-------------	|-------	|
-|uint256|ONE    | The number one| 1       	|
+- `BaseAdapter`
+#### Struct
+ExchangeSettings
+
+| Type  | Name  | Description  |
+|------ |------ |------------- |
+| uint256 |twapMaxTradeSize|TWAP Max trade size|
+| bytes |leverExchangeData|Arbitrary exchange data for lever|
+| bytes |deleverExchangeData|Arbitrary exchange data for delever|
+| uint256 |incentivizedTwapMaxTradeSize|Ripcord TWAP Max trade size|
+| uint256 |exchangeLastTradeTimestamp|Exchange last trade timestamp which is separate from global variable|
+
+LeverageInfo (Updated)
+
+| Type  | Name  | Description   |
+|------ |------ |-------------  |
+| string |exchangeName|Store the exchange string|
+
 #### Public Variables
-| Type 	| Name 	| Description 	|
-|------	|------	|-------------	|
-|uint256|hodlers|Number of holders of this token|
-#### Modifiers
-> onlyManager(SetToken _setToken)
-#### Functions
-> issue(SetToken _setToken, uint256 quantity) external
-- Pseudo code
+| Type  | Name  | Description   |
+|------ |------ |-------------  |
+|mapping(string => ExchangeSettings) |exchangeSettings|Mapping of exchange name to settings struct|
+|string[]|enabledExchanges|Array of enabled exchange names|
+|uint256|globalLastTradeTimestamp (Updated from lastTradeTimestamp)| Last rebalance timestamp|
+
+#### Updated Functions
+
+> function rebalance()
+- exchangeName: name of exchange registered in the IntegrationRegistry for the CompoundLeverageModule
+
+```solidity
+function rebalance(string memory _exchangeName) external onlyEOA onlyAllowedCaller(msg.sender) {
+
+    LeverageInfo memory leverageInfo = _getAndValidateLeveragedInfo(execution.slippageTolerance, exchangeSettings[_exchangeName].twapMaxTradeSize, _exchangeName);
+
+    _validateNormalRebalance(leverageInfo, methodology.rebalanceInterval, globalLastTradeTimestamp);
+    
+    ...
+
+
+}
+```
+
+> function iterateRebalance()
+- exchangeName: name of exchange registered in the IntegrationRegistry for the CompoundLeverageModule
+
+```solidity
+function iterateRebalance(string memory _exchangeName) external onlyEOA onlyAllowedCaller(msg.sender) {
+
+    LeverageInfo memory leverageInfo = _getAndValidateLeveragedInfo(execution.slippageTolerance, exchangeSettings[_exchangeName].twapMaxTradeSize, _exchangeName);
+    
+    _validateNormalRebalance(leverageInfo, execution.twapCooldownPeriod, executionSettings[_exchangeName].exchangeLastTradeTimestamp);
+
+    ...
+
+    
+}
+```
+
+> function ripcord()
+- exchangeName: name of exchange registered in the IntegrationRegistry for the CompoundLeverageModule
+
+```solidity
+function ripcord(string memory _exchangeName) external onlyEOA onlyAllowedCaller(msg.sender) {
+    LeverageInfo memory leverageInfo = _getAndValidateLeveragedInfo(
+        incentive.incentivizedSlippageTolerance, 
+        exchangeSettings[_exchangeName].incentivizedTwapMaxTradeSize,
+        _exchangeName
+    );
+
+    _validateRipcord(leverageInfo, executionSettings[_exchangeName].exchangeLastTradeTimestamp);
+
+    ...
+  
+}
+```
+
+> function disengage()
+- exchangeName: name of exchange registered in the IntegrationRegistry for the CompoundLeverageModule
+
+```solidity
+function disengage(string memory _exchangeName) external onlyOperator {
+    LeverageInfo memory leverageInfo = _getAndValidateLeveragedInfo(execution.slippageTolerance, exchangeSettings[_exchangeName].twapMaxTradeSize, _exchangeName);
+
+    ...
+
+}
+```
+
+> function engage()
+- exchangeName: name of exchange registered in the IntegrationRegistry for the CompoundLeverageModule
+
+```solidity
+function engage(string memory _exchangeName) external onlyOperator {
+    LeverageInfo memory leverageInfo = LeverageInfo({
+        action: engageInfo,
+        currentLeverageRatio: PreciseUnitMath.preciseUnit(), // 1x leverage in precise units
+        slippageTolerance: execution.slippageTolerance,
+        twapMaxTradeSize: execution.twapMaxTradeSize,
+        exchangeName: _exchangeName
+    });
+
+    ...
+
+    
+}
+```
+
+> function _getAndValidateLeveragedInfo()
+- slippageTolerance
+- maxTradeSize
+- exchangeName
+```solidity
+function _getAndValidateLeveragedInfo(uint256 _slippageTolerance, uint256 _maxTradeSize, string memory _exchangeName) internal view returns(LeverageInfo memory) {
+    // Check the max trade size is >0 to see if exchange is enabled on the adapter
+    require(_maxTradeSize > 0, "Must be valid exchange");
+    
+    ...
+
+    return LeverageInfo({
+        action: actionInfo,
+        currentLeverageRatio: currentLeverageRatio,
+        slippageTolerance: _slippageTolerance,
+        twapMaxTradeSize: _maxTradeSize,
+        exchangeName: _exchangeName
+    });
+}
+```
+
+> function _validateNormalRebalance()
+- leverageInfo
+- twapCooldownPeriod
+- lastTradeTimestamp
+```solidity
+function _validateNormalRebalance(LeverageInfo memory _leverageInfo, uint256 _coolDown, uint256 _lastTradeTimestamp) internal view {
+    ...
+
+    require(
+        block.timestamp.sub(_lastTradeTimestamp) > _coolDown
+        || _leverageInfo.currentLeverageRatio > methodology.maxLeverageRatio
+        || _leverageInfo.currentLeverageRatio < methodology.minLeverageRatio,
+        "Cooldown not elapsed or not valid leverage ratio"
+    );
+}
+```
+
+> function _validateRipcord()
+- leverageInfo
+- lastTradeTimestamp
+```solidity
+function _validateRipcord(LeverageInfo memory _leverageInfo, uint256 _lastTradeTimestamp) internal view {
+    ...
+
+    // If currently in the midst of a TWAP rebalance, ensure that the cooldown period has elapsed
+    require(_lastTradeTimestamp.add(incentive.incentivizedTwapCooldownPeriod) < block.timestamp, "TWAP cooldown must have elapsed");
+}
+```
+
+> function _delever()
+- leverageInfo
+- chunkRebalanceNotional
+
+```solidity
+function _delever(LeverageInfo memory _leverageInfo, uint256 _chunkRebalanceNotional) internal {
+    
+    ...
+
+    bytes memory deleverCallData = abi.encodeWithSignature(
+        "delever(address,address,address,uint256,uint256,string,bytes)",
+        address(strategy.setToken),
+        strategy.collateralAsset,
+        strategy.borrowAsset,
+        collateralRebalanceUnits,
+        minRepayUnits,
+        _leverageInfo.exchangeName,
+        _leverageInfo.deleverExchangeData
+    );
+}
+```
+
+> function _lever()
+- leverageInfo
+- chunkRebalanceNotional
+
+```solidity
+function _lever(LeverageInfo memory _leverageInfo, uint256 _chunkRebalanceNotional) internal {
+    
+    ...
+
+    bytes memory leverCallData = abi.encodeWithSignature(
+        "lever(address,address,address,uint256,uint256,string,bytes)",
+        address(strategy.setToken),
+        strategy.borrowAsset,
+        strategy.collateralAsset,
+        borrowUnits,
+        minReceiveCollateralUnits,
+        _leverageInfo.exchangeName,
+        _leverageInfo.leverExchangeData
+    );
+}
+```
+
+> function _deleverToZeroBorrowBalance()
+- leverageInfo
+- chunkRebalanceNotional
+
+```solidity
+function _deleverToZeroBorrowBalance(LeverageInfo memory _leverageInfo, uint256 _chunkRebalanceNotional) internal {
+    
+    ...
+
+    bytes memory deleverToZeroBorrowBalanceCallData = abi.encodeWithSignature(
+        "deleverToZeroBorrowBalance(address,address,address,uint256,string,bytes)",
+        address(strategy.setToken),
+        strategy.collateralAsset,
+        strategy.borrowAsset,
+        maxCollateralRebalanceUnits,
+        _leverageInfo.exchangeName,
+        _leverageInfo.deleverExchangeData
+    );
+}
+```
+
+> function _updateRebalanceState()
+- chunkRebalanceNotional
+- totalRebalanceNotional
+- newLeverageRatio
+- exchangeName
+
+```solidity
+function _updateRebalanceState(uint256 _chunkRebalanceNotional, uint256 _totalRebalanceNotional, uint256 _newLeverageRatio, string memory _exchangeName) internal {
+    globalLastTradeTimestamp = block.timestamp;
+
+    executionSettings[_exchangeName].exchangeLastTradeTimestamp = block.timestamp;
+    
+    ...
+
+}
+```
+
+> function _updateIterateState()
+- chunkRebalanceNotional
+- totalRebalanceNotional
+- exchangeName
+
+```solidity
+function _updateIterateState(uint256 _chunkRebalanceNotional, uint256 _totalRebalanceNotional, string memory _exchangeName) internal {
+    globalLastTradeTimestamp = block.timestamp;
+
+    executionSettings[_exchangeName].exchangeLastTradeTimestamp = block.timestamp;
+    
+    ...
+
+}
+```
+
+> function _updateRipcordState()
+- exchangeName
+
+```solidity
+function _updateRipcordState(string memory _exchangeName) internal {
+    globalLastTradeTimestamp = block.timestamp;
+
+    executionSettings[_exchangeName].exchangeLastTradeTimestamp = block.timestamp;
+    
+    ...
+
+}
+```
+
+> function _validateSettings()
+- methodology
+- execution
+- incentive
+
+```solidity
+function _validateSettings(MethodologySettings memory _methodology, ExecutionSettings memory _execution, IncentiveSettings memory _incentive) internal pure {
+
+    // Remove below as this is not that useful of a validation
+    require (
+        _execution.twapMaxTradeSize <= _incentive.incentivizedTwapMaxTradeSize,
+        "TWAP max trade size must be less than incentivized TWAP max trade size"
+    );
+
+}
+```
+
+> function addEnabledExchange()
+- exchangeName
+- exchangeSettings
+
+```solidity
+function addEnabledExchange(string memory _exchangeName, ExchangeSettings memory _newExchangeSettings) external onlyOperator noRebalanceInProgress {
+    exchangeSettings[_exchangeName] = _newExchangeSettings;
+
+    enabledExchanges.push(_exchangeName);
+}
+```
+
+> function removeExchange()
+- exchangeName
+
+```solidity
+function removeExchange(string memory _exchangeName) external onlyOperator noRebalanceInProgress {
+    delete exchangeSettings[_exchangeName];
+
+    enabledExchanges.remove(_exchangeName);
+}
+```
+
 ## Checkpoint 3
 Before we move onto the implementation phase we want to make sure that we are aligned on the spec. All contracts should be specced out, their state and external function signatures should be defined. For more complex contracts, internal function definition is preferred in order to align on proper abstractions. Reviewer should take care to make sure that all stake holders (product, app engineering) have their needs met in this stage.
 
