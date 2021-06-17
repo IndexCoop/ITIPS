@@ -31,6 +31,7 @@ Below is an audit of our current rebalance process for various products:
 - [x] Can we generalize to use any oracle system other than Chainlink?
     - Yes, using the Set oracles adapter interface
 - [ ] Should oracles return the quote in ETH or in USD?
+- [ ] Can we get oracles for all assets in our indices?
 
 ## Feasibility Analysis
 
@@ -40,10 +41,60 @@ This option implements a custom adapter for each index product and encodes the m
 ### General rebalance adapter that is standard across indices
 This option standardizes methodologist process to only providing % weights. The methodology is still calculated offchain (or in a separate smart contract for onchain data - potentially SMI). The contract will allowlist submitters who are only allowed by the operator and methodologist to submit % weights depending on the reblanace interval. This is then timelocked based on the methodology. For DPI, this is 7 days.
 
-|      | Custom index adapter                                                      | General rebalance adapter                                                        |
+|      | Custom index adapter                                                      | Percent-based rebalance adapter                                                        |
 |------|---------------------------------------------------------------------------|----------------------------------------------------------------------------------|
 | Pros | Most decentralized, most automated                                        | Can be used across products, standardizes methodologist to operator relationship |
 | Cons | Not flexible, need a new adapter for methodology changes and each product | Methodology is calculated offchain so more centralization there 
+
+### Oracle Availability
+The two solutions above are reliant on oracles, we need to make sure that we have oracles or a way to access/create oracles for every asset in our indices:    
+| Token 	| Index 	| USD Oracle 	| ETH Oracle 	|
+|-------	|-------	|------------	|------------	|
+| ETH   	| SMI   	| CL         	| N/A        	|
+| BTC   	| SMI   	| CL         	| CL         	|
+| DPI   	| SMI   	| CL         	| CL         	|
+| LINK  	| SMI   	| CL         	| CL         	|
+| DAI   	| SMI   	| CL         	| CL         	|
+| YFI   	| DPI   	| CL         	| CL         	|
+| COMP  	| DPI   	| CL         	| CL         	|
+| SNX   	| DPI   	| CL         	| CL         	|
+| MKR   	| DPI   	| CL         	| CL         	|
+| REN   	| DPI   	| CL         	| CL         	|
+| KNC   	| DPI   	| CL         	| CL         	|
+| LRC   	| DPI   	| CL         	| CL         	|
+| BAL   	| DPI   	|            	| CL         	|
+| UNI   	| DPI   	| CL         	| CL         	|
+| AAVE  	| DPI   	| CL         	| CL         	|
+| MTA   	| DPI   	| CL         	| CL          |
+| SUSHI 	| DPI   	| CL         	| CL         	|
+| CREAM 	| DPI   	|            	| CL         	|
+| FARM  	| DPI   	|            	|             |
+| MANA  	| MVI   	|            	| CL         	|
+| ENJ   	| MVI   	|            	| CL         	|
+| WAXE  	| MVI   	|            	|            	|
+| AXS   	| MVI   	|            	|            	|
+| SAND  	| MVI   	|            	|            	|
+| RFOX  	| MVI   	|            	|            	|
+| AUDIO 	| MVI   	|            	|            	|
+| DG    	| MVI   	|            	|            	|
+| NFTX  	| MVI   	|            	|            	|
+| WHALE 	| MVI   	|            	|            	|
+| MEME  	| MVI   	|            	|            	|
+| TVK   	| MVI   	|            	|            	|
+| RARI  	| MVI   	|            	|            	|
+| REVV  	| MVI   	|            	|            	|
+| MUSE  	| MVI   	|            	|            	|
+
+[Chainlink Oracles](https://docs.chain.link/docs/ethereum-addresses/), Note: All ETH Oracles are 18 decimals, USD oracles are 8 decimals
+
+### Recommendation
+Custom adapters that encode the allocation determination algorithm for each index are the ideal scenario from a decentralization perspective and the inevitable end game of these products. However, right now there are not the resources to individually implement each strategy, so we need a solution that ideally can be implemented once and work for all indices. To that end, it makes the most sense to pursue a Percent-based rebalance adapter. The feasability of the Percent-based adapter however also needs to be evaluated on an index by index basis as some indices may not have easy oracle access for all it's components:    
+- **DPI** - We are missing one oracle (FARM) but should be able to get that and use **Percent-based Rebalance Adapter**
+- **MTA** - Very few oracles exist for these assets, we may need to consider migrating MVI to the new manager system but still just use a **Pass Through Adapter** until sufficient oracles are available. This will require more off-chain work and likely a similar flow to our current set up.
+- **SMI** - We have oracles for all of these assets and can easily deploy with a **Percent-based Rebalance Adapter**.
+- **BED** - We have oracles for all of these assets and can easily deploy with a **Percent-based Rebalance Adapter**.
+
+To pursue this strategy we will need to develop a Percent-based Rebalance Adapter as well as an adapter that can operate as a pass through. Moving the MVI to a pass through system will allow for greater compatibility with an admin dashboard as well as easier transition to a Percent-based Rebalance Adapter when the oracles are ready.
 
 ## Timeline
 - Spec + review: 3-4 days
