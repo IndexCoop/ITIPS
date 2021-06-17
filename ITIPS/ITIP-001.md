@@ -170,10 +170,10 @@ To start we will revisit the current rebalance flow:
 - `setExchangeSettings`
     - Added to contract
 - `_shouldRebalance`
-    - Update to pass in exchange specific last trade timestamp
+    - Update to pass in exchange name
 - `getExchangeSettings`
 
-### FLI Viewer (_Launch +1 Release_)
+### FLI Viewer (_Post Launch Release_)
 1. A keeper wants to know the FLIStrategy function to call and the exchange to use so they call `getFLIFunctionAndExchange`
 2. Viewer calls shouldRebalance on FLIStrategyAdapter and receives function to call and list of exchanges that can be used
 3. FLIViewer iterates over each exchange doing following:
@@ -181,12 +181,22 @@ To start we will revisit the current rebalance flow:
     - Get size of rebalance trade
     - Get quote from exchange
 
+### Public Function Interface Changes
+- `shouldRebalance()` => `rebalance(string _exchangeName)`
+- `shouldRebalanceWithBounds(uint256 minLeverage, uint256 maxLeverage)` => `shouldRebalanceWithBounds(uint256 minLeverage, uint256 maxLeverage, string _exchangeName)`
+- `rebalance()` => `rebalance(string _exchangeName)`
+- `iterateRebalance()` => - `iterateRebalance(string _exchangeName)`
+- `ripcord()` => `ripcord(string _exchangeName)`
+- `engage()` => `engage(string _exchangeName)`
+- `disengage()` => `disengage(string _exchangeName)`
+
 ## Checkpoint 2
 Before we spec out the contract(s) in depth we want to make sure that we are aligned on all the technical requirements and flows for contract interaction. Again the who, what, when, why should be clearly illuminated for each flow. It is up to the reviewer to determine whether we move onto the next step.
 
 **Reviewer**:
 
-Reviewer: []
+Reviewer: @richardliang
+
 ## Specification
 
 ### `FlexibleLeverageStrategyAdapter`
@@ -474,6 +484,41 @@ function _validateSettings(MethodologySettings memory _methodology, ExecutionSet
         _execution.twapMaxTradeSize <= _incentive.incentivizedTwapMaxTradeSize,
         "TWAP max trade size must be less than incentivized TWAP max trade size"
     );
+
+}
+```
+
+> function _shouldRebalance()
+- currentLeverageRatio
+- minLeverageRatio
+- maxLeverageRatio
+
+```solidity
+function _shouldRebalance(uint256 _currentLeverageRatio, uint256 _minLeverageRatio, uint256 _maxLeverageRatio) internal pure {
+
+    // If above ripcord threshold, then check if incentivized cooldown period has elapsed. Check 
+    if (_currentLeverageRatio >= incentive.incentivizedLeverageRatio) {
+        if (exchangeSettings[_exchangeName].exchangeLastTradeTimestamp.add(incentive.incentivizedTwapCooldownPeriod) < block.timestamp) {
+            return ShouldRebalance.RIPCORD;
+        }
+    } else {
+        // If TWAP, then check if the cooldown period has elapsed
+        if (twapLeverageRatio > 0) {
+            if (exchangeSettings[_exchangeName].exchangeLastTradeTimestamp.add(execution.twapCooldownPeriod) < block.timestamp) {
+                return ShouldRebalance.ITERATE_REBALANCE;
+            }
+        } else {
+            // If not TWAP, then check if the rebalance interval has elapsed OR current leverage is above max leverage OR current leverage is below
+            // min leverage
+            if (
+                block.timestamp.sub(globalLastTradeTimestamp) > methodology.rebalanceInterval
+                || _currentLeverageRatio > _maxLeverageRatio
+                || _currentLeverageRatio < _minLeverageRatio
+            ) {
+                return ShouldRebalance.REBALANCE;
+            }
+        }
+    }
 
 }
 ```
