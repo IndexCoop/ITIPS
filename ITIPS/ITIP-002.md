@@ -29,8 +29,9 @@ Below is an audit of our current rebalance process for various products:
 
 ## Open Questions
 - [x] Can we generalize to use any oracle system other than Chainlink?
-    - Yes, using the Set oracles adapter interface
-- [ ] Should oracles return the quote in ETH or in USD?
+    - *Yes, using the Set oracles adapter interface*
+- [x] Should oracles return the quote in ETH or in USD?
+    - *Seems there's more oracles for ETH so we should use ETH*
 - [ ] Can we get oracles for all assets in our indices?
 
 ## Feasibility Analysis
