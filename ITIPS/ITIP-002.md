@@ -1,4 +1,4 @@
-# ITIP-[xx]
+# ITIP-002
 *Using template v0.1*
 ## Abstract
 Index Coop and other partners will be seeking to launch numerous portfolio strategies that need to be periodically rebalanced. Currently, these are FLI, DPI and MVI with TTI, BED, SDI, Stable Yield Index in the pipeline.
