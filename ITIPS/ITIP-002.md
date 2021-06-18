@@ -90,12 +90,12 @@ The two solutions above are reliant on oracles, we need to make sure that we hav
 
 ### Recommendation
 Custom adapters that encode the allocation determination algorithm for each index are the ideal scenario from a decentralization perspective and the inevitable end game of these products. However, right now there are not the resources to individually implement each strategy, so we need a solution that ideally can be implemented once and work for all indices. To that end, it makes the most sense to pursue a Percent-based rebalance adapter. The feasability of the Percent-based adapter however also needs to be evaluated on an index by index basis as some indices may not have easy oracle access for all it's components:    
-- **DPI** - We are missing one oracle (FARM) but should be able to get that and use **Percent-based Rebalance Adapter**
+- **DPI** - We are missing one oracle (FARM) which as of now seems unattainable so to start will use **Pass Through Adapter**
 - **MTA** - Very few oracles exist for these assets, we may need to consider migrating MVI to the new manager system but still just use a **Pass Through Adapter** until sufficient oracles are available. This will require more off-chain work and likely a similar flow to our current set up.
 - **SMI** - We have oracles for all of these assets and can easily deploy with a **Percent-based Rebalance Adapter**.
-- **BED** - We have oracles for all of these assets and can easily deploy with a **Percent-based Rebalance Adapter**.
+- **BED** - We have oracles for all of these assets and can easily deploy with a **Percent-based Rebalance Adapter** (though may opt to encode the strategy from the start).
 
-To pursue this strategy we will need to develop a Percent-based Rebalance Adapter as well as an adapter that can operate as a pass through. Moving the MVI to a pass through system will allow for greater compatibility with an admin dashboard as well as easier transition to a Percent-based Rebalance Adapter when the oracles are ready.
+To pursue this strategy we will need to develop a Percent-based Rebalance Adapter as well as an adapter that can operate as a pass through. Moving the MVI to a pass through system will allow for greater compatibility with an admin dashboard as well as easier transition to a Percent-based Rebalance Adapter when the oracles are ready. In order to reduce code the Pass Through Adapter should be designed to be inheritable by the Percent-based Adapter.
 
 ## Timeline
 - Spec + review: 3-4 days
