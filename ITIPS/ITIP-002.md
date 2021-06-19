@@ -33,6 +33,7 @@ Below is an audit of our current rebalance process for various products:
 - [x] Should oracles return the quote in ETH or in USD?
     - *Seems there's more oracles for ETH so we should use ETH. Also ETH is more relevant if we want to route trades through this adapter*
 - [ ] Can we get oracles for all assets in our indices?
+- [ ] Are there any other admin features we want that will make the Index Coop's lives easier?
 
 ## Feasibility Analysis
 
@@ -40,7 +41,7 @@ Below is an audit of our current rebalance process for various products:
 This option implements a custom adapter for each index product and encodes the methodology directly in the smart contracts. This is the most decentralized, but also the least flexible option. For DPI, this means encoding the circulation supply calculation and max % weight of 25% in the smart contracts. For SMI, this will directly read the debt pool.
 
 ### General rebalance adapter that is standard across indices
-This option standardizes methodologist process to only providing % weights. The methodology is still calculated offchain (or in a separate smart contract for onchain data - potentially SMI). The contract will allowlist submitters who are only allowed by the operator and methodologist to submit % weights depending on the reblanace interval. This is then timelocked based on the methodology. For DPI, this is 7 days.
+This option standardizes methodologist process to only providing % weights. The methodology is still calculated offchain (or in a separate smart contract for onchain data - potentially SMI). The contract will allowlist submitters who are only allowed by the operator to submit % weights depending on the reblanace interval. This is then timelocked based on the methodology. For DPI, this is 7 days. The passed allocation can then be vetoed by the operator during the timelock period. If the period elapses with no veto then anyone can start the rebalance. 
 
 |      | Custom index adapter                                                      | Percent-based rebalance adapter                                                        |
 |------|---------------------------------------------------------------------------|----------------------------------------------------------------------------------|
@@ -89,13 +90,13 @@ The two solutions above are reliant on oracles, we need to make sure that we hav
 [Chainlink Oracles](https://docs.chain.link/docs/ethereum-addresses/), Note: All ETH Oracles are 18 decimals, USD oracles are 8 decimals
 
 ### Recommendation
-Custom adapters that encode the allocation determination algorithm for each index are the ideal scenario from a decentralization perspective and the inevitable end game of these products. However, right now there are not the resources to individually implement each strategy, so we need a solution that ideally can be implemented once and work for all indices. To that end, it makes the most sense to pursue a Percent-based rebalance adapter. The feasability of the Percent-based adapter however also needs to be evaluated on an index by index basis as some indices may not have easy oracle access for all it's components:    
-- **DPI** - We are missing one oracle (FARM) which as of now seems unattainable so to start will use **Pass Through Adapter**
-- **MTA** - Very few oracles exist for these assets, we may need to consider migrating MVI to the new manager system but still just use a **Pass Through Adapter** until sufficient oracles are available. This will require more off-chain work and likely a similar flow to our current set up.
-- **SMI** - We have oracles for all of these assets and can easily deploy with a **Percent-based Rebalance Adapter**.
-- **BED** - We have oracles for all of these assets and can easily deploy with a **Percent-based Rebalance Adapter** (though may opt to encode the strategy from the start).
+Custom adapters that encode the allocation determination algorithm for each index are the ideal scenario from a decentralization perspective and the inevitable end game of these products. However, right now there are not the resources to individually implement each strategy, so we need a solution that ideally can be implemented once and work for all indices. To that end, it makes the most sense to **develop a Percent-based rebalance adapter** where necessary and also develop a **Pass Through Adapter** for indices that don't have an oracle. **Below are the adapters necessary on a index-by-index basis**:    
+- **DPI** - We are missing one oracle (FARM) which as of now seems unattainable so to start will use **Pass Through Adapter**. Migrating to this new adapter will still allow for savings by being able to easily integrate with an IndexCoop admin dashboard (vs the status quo).
+- **MVI** - Very few oracles exist for these assets, we may need to consider migrating MVI to the new manager system but still just use a **Pass Through Adapter** until sufficient oracles are available. This will require more off-chain work and likely a similar flow to our current set up. Migrating to this new adapter will still allow for savings by being able to easily integrate with an IndexCoop admin dashboard (vs the status quo).
+- **SMI** - We have oracles for all of these assets and can easily deploy with a **Percent-based Rebalance Adapter**. With this set up we can make the whole rebalance end-to-end automated, only requiring a review of the new allocations during the timelock period. This could reduce weekly maintenance time potentially to a matter of minutes.
+- **BED** - We have oracles for all of these assets and can easily deploy with a **Percent-based Rebalance Adapter** (though may opt to encode the strategy from the start). Since this strategy is easily encodable we can make it end-to-end automated with no requirement for oversight. This could reduce weekly maintenance time potentially to a matter of minutes.
 
-To pursue this strategy we will need to develop a Percent-based Rebalance Adapter as well as an adapter that can operate as a pass through. Moving the MVI to a pass through system will allow for greater compatibility with an admin dashboard as well as easier transition to a Percent-based Rebalance Adapter when the oracles are ready. In order to reduce code the Pass Through Adapter should be designed to be inheritable by the Percent-based Adapter.
+As a final note, in order to reduce code the Pass Through Adapter should be designed to be inheritable by the Percent-based Adapter.
 
 ## Timeline
 - Spec + review: 3-4 days
