@@ -376,11 +376,6 @@ function _validateRipcord(LeverageInfo memory _leverageInfo, uint256 _lastTradeT
     // If currently in the midst of a TWAP rebalance, ensure that the cooldown period has elapsed
     require(_lastTradeTimestamp.add(incentive.incentivizedTwapCooldownPeriod) < block.timestamp, "TWAP cooldown must have elapsed");
 
-    // There are cases where incentivized max trade size is set to 0 to disable ripcord for certain exchanges
-    require (
-        exchangeSettings[_leverageInfo.exchangeName].incentivizedTwapMaxTradeSize > 0,
-        "Incentivized TWAP max trade size must be greater than 0"
-    );
 }
 ```
 
@@ -647,9 +642,17 @@ function shouldRebalanceWithBounds(
     view
     returns(string memory [], FLIRebalanceAction[])
 {
+    // Check if current leverage ratio is 
+
+
     // Get total notional to rebalance from FLI adapter
+    uint256 rebalanceNotional = fliStrategyAdapter.getTotalRebalanceNotional();
+
+    // Get V3 trade path
+    bytes memory tradePath = fliStrategyAdapter
 
     // Get quote from Uniswap V3 SwapRouter
+    uint256 uniswapV3Quote = uniswapV3Quoter.quoteExactInput();
 
     // Get quote from Uniswap V2 Router
 
