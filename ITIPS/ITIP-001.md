@@ -576,8 +576,10 @@ function removeExchange(string memory _exchangeName) external onlyOperator noReb
 > function getTotalRebalanceNotional()
 
 ```solidity
-function getTotalRebalanceNotional() external view returns (uint256) {
+function getTotalRebalanceNotional() external view returns (bool, uint256) {
     // Either use existing internal functions or recreate logic that reduces unnecessary calls
+
+    // Return boolean indicating whether to lever or delever, and uint256 of the asset notional being sold (collateral units for delever and borrow units for lever). May require an oracle calculation
 }
 ```
 
@@ -586,14 +588,6 @@ function getTotalRebalanceNotional() external view returns (uint256) {
 FLI Rebalance viewer that compares prices between Uniswap V3 and Uniswap V2 (or router with matching interface) and returns the exchangeName with better prices and the rebalance action in the FlexibleLeverageStrategyAdapter. Note: this is only limited to comparing one V3 and one V2-like exchange (Uniswap V2, Sushiswap, TradeSplitter)
 
 #### Enums
-FLIRebalanceAction
-
-| Name  | Description  |
-|------ |------------- |
-|NONE|Indicates no rebalance action can be taken|
-|REBALANCE|Indicates rebalance() function can be successfully called|
-|ITERATE_REBALANCE|Indicates iterateRebalance() function can be successfully called|
-|RIPCORD|Indicates ripcord() function can be successfully called|
 
 #### Public Variables
 | Type  | Name  | Description   |
@@ -603,6 +597,7 @@ FLIRebalanceAction
 |IUniswapV3Quoter|uniswapV3Quoter|Uniswap V3 get quote contract |
 |string|uniswapV3ExchangeName|Human readable string of the V3 exchange in the Set system|
 |string|uniswapV2ExchangeName|Human readable string of the V2 exchange (Sushi, Uni V2, TradeSplitter) that conforms to the same get quote interface in the Set system|
+|address[]|uniswapV2TradePath|Trade path for Uniswap V2. This is rarely changed, so we can hardcode in the viewer|
 
 #### Functions
 > function constructor()
@@ -633,30 +628,56 @@ function constructor(
 - customMaxLeverageRatio
 
 ```solidity
-// Note: we return 1 exchange and 1 FLIRebalanceAction in these arrays, but we match the interface in the FLI strategy adapter to minimize keeper bot logic
+// Note: we return 1 exchange and 1 FLIRebalanceAction in these arrays, but we match the interface in the FLI strategy adapter to minimize keeper bot logic. We make the assumption that UniswapV3 and an UniswapV2 exchange is enabled in the adapter for this viewer to work
 function shouldRebalanceWithBounds(
     uint256 _customMinLeverageRatio,
     uint256 _customMaxLeverageRatio
 )
     external
     view
-    returns(string memory [], FLIRebalanceAction[])
+    returns(string[] memory, FlexibleLeverageStrategyAdapter.ShouldRebalance[] memory)
 {
-    // Check if current leverage ratio is 
-
-
     // Get total notional to rebalance from FLI adapter
-    uint256 rebalanceNotional = fliStrategyAdapter.getTotalRebalanceNotional();
+    (bool isLever, uint256 notionalSendQuantity) = fliStrategyAdapter.getTotalRebalanceNotional();
 
     // Get V3 trade path
-    bytes memory tradePath = fliStrategyAdapter
+    bytes memory uniswapV3TradePath = isLever ? fliStrategyAdapter[uniswapV3ExchangeName].leverExchangeData : fliStrategyAdapter[uniswapV3ExchangeName].leverExchangeData;
 
     // Get quote from Uniswap V3 SwapRouter
-    uint256 uniswapV3Quote = uniswapV3Quoter.quoteExactInput();
+    uint256 uniswapV3QuoteAmount = uniswapV3Quoter.quoteExactInput(uniswapV3TradePath, notionalSendQuantity);
 
     // Get quote from Uniswap V2 Router
+    uint256 uniswapV2QuoteAmount = uniswapV2Router.getAmountsOut(notionalSendQuantity, uniswapV2TradePath)[uniswapV2TradePath.length.sub(1)];\\
 
-    // Loop through 
+    // Check shouldRebalanceWithBounds on strategy adapter
+    (string[] enabledExchanges, FlexibleLeverageStrategyAdapter.ShouldRebalance[]) = strategyAdapter.shouldRebalanceWithBounds(
+        _customMinLeverageRatio,
+        _customMaxLeverageRatio
+    );
+
+    bool useV3;
+    if (uniswapV3Quote > uniswapV2Quote) {
+        useV3 = true;
+    } else {
+        useV3 = false;
+    }
+
+    // Loop through array and find rebalance enum
+    for (uint256 i = 0; i < enabledExchanges.length; i++) {
+        if (
+            useV3
+            && enabledExchanges[i] == uniswapV3ExchangeName
+        ) {
+            return ([uniswapV3ExchangeName], [FlexibleLeverageStrategyAdapter.ShouldRebalance[i]])
+        }
+
+        if (
+            !useV3
+            && enabledExchanges[i] == uniswapV2ExchangeName
+        ) {
+            return ([uniswapV2ExchangeName], [FlexibleLeverageStrategyAdapter.ShouldRebalance[i]])
+        }
+    }
 }
 ```
 
