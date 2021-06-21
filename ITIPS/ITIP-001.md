@@ -655,24 +655,17 @@ function shouldRebalanceWithBounds(
         _customMaxLeverageRatio
     );
 
-    bool useV3;
-    if (uniswapV3Quote > uniswapV2Quote) {
-        useV3 = true;
-    } else {
-        useV3 = false;
-    }
-
     // Loop through array and find rebalance enum
     for (uint256 i = 0; i < enabledExchanges.length; i++) {
         if (
-            useV3
+            uniswapV3Quote > uniswapV2Quote
             && enabledExchanges[i] == uniswapV3ExchangeName
         ) {
             return ([uniswapV3ExchangeName], [FlexibleLeverageStrategyAdapter.ShouldRebalance[i]])
         }
 
         if (
-            !useV3
+            uniswapV3Quote <= uniswapV2Quote
             && enabledExchanges[i] == uniswapV2ExchangeName
         ) {
             return ([uniswapV2ExchangeName], [FlexibleLeverageStrategyAdapter.ShouldRebalance[i]])
