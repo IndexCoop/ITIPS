@@ -375,6 +375,12 @@ function _validateRipcord(LeverageInfo memory _leverageInfo, uint256 _lastTradeT
 
     // If currently in the midst of a TWAP rebalance, ensure that the cooldown period has elapsed
     require(_lastTradeTimestamp.add(incentive.incentivizedTwapCooldownPeriod) < block.timestamp, "TWAP cooldown must have elapsed");
+
+    // There are cases where incentivized max trade size is set to 0 to disable ripcord for certain exchanges
+    require (
+        exchangeSettings[_leverageInfo.exchangeName].incentivizedTwapMaxTradeSize > 0,
+        "Incentivized TWAP max trade size must be greater than 0"
+    );
 }
 ```
 
@@ -498,7 +504,7 @@ function _updateRipcordState(string memory _exchangeName) internal {
 ```solidity
 function _validateSettings(MethodologySettings memory _methodology, ExecutionSettings memory _execution, IncentiveSettings memory _incentive) internal pure {
 
-    // Remove below as this is not that useful of a validation
+    // Remove below as this. We may disable ripcord functionality for certain exchanges, and we do that by setting incentivizedTwapMaxTradeSize to 0. As a result, we need to ensure incentivizedTwapMaxTradeSize > 0 in the validateRipcord internal function
     require (
         _execution.twapMaxTradeSize <= _incentive.incentivizedTwapMaxTradeSize,
         "TWAP max trade size must be less than incentivized TWAP max trade size"
@@ -579,6 +585,80 @@ function getTotalRebalanceNotional() external view returns (uint256) {
     // Either use existing internal functions or recreate logic that reduces unnecessary calls
 }
 ```
+
+### `FLIRebalanceViewer` [WIP]
+
+FLI Rebalance viewer that compares prices between Uniswap V3 and Uniswap V2 (or router with matching interface) and returns the exchangeName with better prices and the rebalance action in the FlexibleLeverageStrategyAdapter. Note: this is only limited to comparing one V3 and one V2-like exchange (Uniswap V2, Sushiswap, TradeSplitter)
+
+#### Enums
+FLIRebalanceAction
+
+| Name  | Description  |
+|------ |------------- |
+|NONE|Indicates no rebalance action can be taken|
+|REBALANCE|Indicates rebalance() function can be successfully called|
+|ITERATE_REBALANCE|Indicates iterateRebalance() function can be successfully called|
+|RIPCORD|Indicates ripcord() function can be successfully called|
+
+#### Public Variables
+| Type  | Name  | Description   |
+|------ |------ |-------------  |
+|IFLIStrategyAdapter|strategyAdapter|FLI Strategy adapter that uses multiple exchanges|
+|IUniswapV2Router |uniswapV2Router|Uniswap V2 router or router with matching interface|
+|IUniswapV3Quoter|uniswapV3Quoter|Uniswap V3 get quote contract |
+|string|uniswapV3ExchangeName|Human readable string of the V3 exchange in the Set system|
+|string|uniswapV2ExchangeName|Human readable string of the V2 exchange (Sushi, Uni V2, TradeSplitter) that conforms to the same get quote interface in the Set system|
+
+#### Functions
+> function constructor()
+- fliStrategyAdapter: Address of FLI adapter contract
+- uniswapV3Quoter: Uniswap V3 get quote contract
+- uniswapV2Router: Uniswap V2 or router with matching interface
+- uniswapV3ExchangeName: name of exchange registered in the IntegrationRegistry for the CompoundLeverageModule
+- uniswapV2ExchangeName: name of exchange registered in the IntegrationRegistry for the CompoundLeverageModule
+
+```solidity
+function constructor(
+    IFLIStrategyAdapter _fliStrategyAdapter,
+    IUniswapV3Quoter _uniswapV3Quoter,
+    IUniswapV2Router _uniswapV2Router,
+    string memory _uniswapV3ExchangeName,
+    string memory _uniswapV2ExchangeName
+)
+    public
+{
+
+    // Set public variables
+
+}
+```
+
+> function shouldRebalanceWithBounds()
+- customMinLeverageRatio
+- customMaxLeverageRatio
+
+```solidity
+// Note: we return 1 exchange and 1 FLIRebalanceAction in these arrays, but we match the interface in the FLI strategy adapter to minimize keeper bot logic
+function shouldRebalanceWithBounds(
+    uint256 _customMinLeverageRatio,
+    uint256 _customMaxLeverageRatio
+)
+    external
+    view
+    returns(string memory [], FLIRebalanceAction[])
+{
+    // Get total notional to rebalance from FLI adapter
+
+    // Get quote from Uniswap V3 SwapRouter
+
+    // Get quote from Uniswap V2 Router
+
+    // Loop through 
+}
+```
+
+
+
 
 ## Checkpoint 3
 Before we move onto the implementation phase we want to make sure that we are aligned on the spec. All contracts should be specced out, their state and external function signatures should be defined. For more complex contracts, internal function definition is preferred in order to align on proper abstractions. Reviewer should take care to make sure that all stake holders (product, app engineering) have their needs met in this stage.
