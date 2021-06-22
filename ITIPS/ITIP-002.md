@@ -25,7 +25,7 @@ The existing index products utilize the `ICManager` contract and Set Protocol's 
 The `FlexibleLeverageStrategyAdapter` uses Chainlink oracles to price slippage and calculate the amount to rebalance. Similarly, we need to use oracles to translate % weights to SetToken units to pass into the GIM `startRebalance` function and price slippage for trades to prevent MEV.
 
 Below is an audit of our current rebalance process for various products:
-![Process Analysis](../assets/rebalanceProcessAudit.png)
+![Process Analysis](../assets/iip-002/rebalanceProcessAudit.png)
 
 ## Open Questions
 - [x] Can we generalize to use any oracle system other than Chainlink?
@@ -113,14 +113,131 @@ Before more in depth design of the contract flows lets make sure that all the wo
 **Reviewer**: @cgewecke and @felix2feng
 
 ## Proposed Architecture Changes
-A diagram would be helpful here to see where new feature slot into the system. Additionally a brief description of any new contracts is helpful.
+![Contract Architecture](../assets/iip-002/contractArchitecture.png)
 
+### GIMAdapter
+- Inherits BaseAdapter
+- Conforms to BaseManager architecture
+- Passthrough functions for parameterizing rebalance behind operator
+    - Including for startRebalanceWithUnits
 
+### PercentBasedGIMAdapter
+- Inherits GIMAdapter
+- Two start rebalance functions:
+    - Pass through function behind operator address (startRebalanceWithUnits inherited from GIMAdapter)
+    - Calculated from weights behind a timelock (submitWeights --> startRebalanceWithWeights)
+
+### ChainlinkOracleAdapter
+- Need to update current adapters to handle 18 decimal prices since Chainlink ETH oracles return 18 vs USD which return 8.
 
 ## Requirements
-These should be a distillation of the previous two sections taking into account the decided upon high-level implementation. Each flow should have high level requirements taking into account the needs of participants in the flow (users, managers, market makers, app devs, etc) 
+- Must have solutions for indexes that have oracle coverage and those that don't
+- Separate out general parameter setting from starting rebalance and trade execution since those at some point will be custom
+- Oracles calculate units from % weights passed into the adapter startRebalance function
+- New oracles can be added if new assets are added to the index. Stored in a mapping
+- Rebalance will not start if an asset does not have an oracle associated with it stored in the adapter
+    - This can be intentional. E.g. we leave mappings out of aTokens
+- Timelocked for a period of time depending on parameter
+- Stores mapping of allowed submitters of weights. These can be methodologists or delegates
+    - Approved addresses can submit new weights
+- Ability for Operator to veto new weights
+- Any address can start the rebalance provided:
+    - Weights have been submitted
+    - Timelock has passed
+    - Time Period since last rebalance has passed
+- Calculate min / max ETH amount using oracle prices to price slippage
+- Trader still has option to pass in price limit but must be more competitive than oracle produced price limit
+- Must be compatible with intrinsic productivity being used during weight submission but all components being moved out of IP before starting rebalance
+
 ## User Flows
-- Highlight *each* external flow enabled by this feature. It's helpful to use diagrams (add them to the `assets` folder). Examples can be very helpful, make sure to highlight *who* is initiating this flow, *when* and *why*. A reviewer should be able to pick out what requirements are being covered by this flow.
+### PercentBasedGIMAdapter.submitWeights() (Before timelocked starts)
+![Submit Weights](../assets/iip-002/submitWeights.png)
+1. When rebalanceInterval since last weight submission timestamp passes, methodologist or another whitelisted address calls this function and passes array of components and component allocations
+2. Check that no new weights have already been submitted
+3. Check that components and allocations arrays are equal length
+4. Loop through components and check if oracles exist for each component. If not, then revert.
+5. Require total percentages add to 100% (summed during loop)
+6. Store arrays on contract, and activate timelock
+
+### PercentBasedGIMAdapter.vetoWeights() (Before timelock elapses)
+![Veto Weights](../assets/iip-002/vetoWeights.png)
+1. It's observed that the weights submitted are incorrect so the Operator (IC Multi-Sig) calls vetoWeights
+2. Require that there is a valid submission in progress
+3. Clear arrays and reset timestamp for timelock
+
+### PercentBasedGIMAdapter.startRebalanceWithWeights() (After timelock)
+![Start Rebalance - Weights](../assets/iip-002/startRebalanceWithWeights.png)
+1. Once timelock elapses, anyone can call the startRebalance function, passing in no parameters
+2. The PercentBasedGIMAdapter calls the SetToken to retrieve the current positionMultiplier and getComponents()
+3. Loop through the getComponents array
+    1. Get associated Chainlink oracle adapter address from stored mapping </li>
+    2. Get price from Chainlink
+    3. Call getDefaultPositionRealUnit for component to receive old units
+    4. Get decimals from mapping
+    5. Calculate component $ valuation
+4. Calculate previous SetToken valuation by summing component $ valuation
+5. Loop through getComponents array
+    1. Multiply % weights by SetToken valuation and adjust for decimal
+    2. Remove component from allocations array
+6. Loop through remaining component(s) in allocations arrays (Sushi)
+    1. Get associated Chainlink oracle adapter address from stored mapping
+    2. Get price from Chainlink
+    3. Get decimals from mapping
+    4. Multiply % weights by SetToken valuation and adjust for decimal
+7. startRebalanceWithUnits is called which creates the bytecode and forwards to the BaseManager which passes to the GeneralIndexModule
+8. Reset timelock and clear array from storage
+
+### PercentBasedGIMAdapter.trade()
+![Trade](../assets/iip-002/trade.png)
+1. A rebalance has been kicked off and an approved trader is looking to rebalance the Set's SUSHI position by calling trade with the SUSHI address and a limit amount of ETH willing to be sold/bought
+2. Check that the calling address is an allowed trader
+3. Get trade size and direction from GIM
+4. Get component's price (in ETH)
+5. Calculate ETH value of component trade size
+6. Apply slippage to trade adjustment to ETH value
+7. Choose the most most aggressive limit between the calculated one and the one passed in by the trader
+8. Invoke trade on GeneralIndexModule through BaseManager
+
+
+### PercentBasedGIMAdapter.addComponent()
+![Add Components](../assets/iip-002/addComponents.png)
+1. In preparation for adding a new component to the index the Operator (IC Multi-sig) submits the new component's address and it's oracle address
+2. Validate neither address is null address
+3. Grab component's decimal and convert to 10**decimal
+4. Store oracle address and decimal
+
+### GIMAdapter.startRebalanceWithUnits()
+![Start Rebalance - Units](../assets/iip-002/startRebalanceWithUnits.png)
+1. The index being rebalanced doesn't have oracles for all its assets so must be rebalanced by passing in the units directly, the Operator (IC Multi-Sig) passes in the current component units, new components, new component units, and positionMultiplier
+2. Inputs are taken and generated into bytecode before being sent to the BaseManager
+3. BaseManager forwards data to GeneralIndexModule, kicking off the rebalance
+
+### Permissioned Flows
+Not all flows are laid out above due to simplicity/duplication of some. All external functions can be found below with expected access controls, Percent = Percent-based adapter, GIM = pass through
+
+
+| Function Name             	| Contract    	| Allowed Caller(s)   	|
+|---------------------------	|-------------	|---------------------	|
+| submitWeights             	| Percent     	| Approved Submitters 	|
+| vetoWeights               	| Percent     	| Operator            	|
+| startRebalanceWithWeights 	| Percent     	| Anyone              	|
+| trade                     	| Percent     	| Approved Addresses  	|
+| tradeRemainingWeth        	| Percent     	| Approved Addresses  	|
+| raiseAssetTargets         	| Percent     	| Approved Addresses  	|
+| addComponent              	| Percent     	| Operator            	|
+| removeComponent           	| Percent     	| Operator            	|
+| setTimelockPeriod         	| Percent     	| Operator            	|
+| setComponentOracle        	| Percent     	| Operator            	|
+| setSubmitterStatus        	| Percent     	| Operator            	|
+| startRebalanceWithUnits   	| GIM/Percent 	| Operator            	|
+| setExchanges              	| GIM/Percent 	| Operator            	|
+| setExchangeData           	| GIM/Percent 	| Operator            	|
+| setTradeMaximums          	| GIM/Percent 	| Operator            	|
+| setCoolOffPeriods         	| GIM/Percent 	| Operator            	|
+| setRaiseTargetPercentage  	| GIM/Percent 	| Operator            	|
+| setTraderStatus           	| GIM/Percent 	| Operator            	|
+| setAnyoneTrade            	| GIM/Percent 	| Operator            	|
+
 ## Checkpoint 2
 Before we spec out the contract(s) in depth we want to make sure that we are aligned on all the technical requirements and flows for contract interaction. Again the who, what, when, why should be clearly illuminated for each flow. It is up to the reviewer to determine whether we move onto the next step.
 
