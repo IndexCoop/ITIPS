@@ -146,7 +146,7 @@ Before more in depth design of the contract flows lets make sure that all the wo
     - Timelock has passed
     - Time Period since last rebalance has passed
 - Calculate min / max ETH amount using oracle prices to price slippage
-- Trader still has option to pass in price limit but must be more competitive than oracle produced price limit
+    - Trader still has option to pass in price limit but must be more competitive than oracle produced price limit
 - Must be compatible with intrinsic productivity being used during weight submission but all components being moved out of IP before starting rebalance
 
 ## User Flows
