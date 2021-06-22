@@ -628,7 +628,7 @@ function constructor(
 - customMaxLeverageRatio
 
 ```solidity
-// Note: we return 1 exchange and 1 FLIRebalanceAction in these arrays, but we match the interface in the FLI strategy adapter to minimize keeper bot logic. We make the assumption that UniswapV3 and an UniswapV2 exchange is enabled in the adapter for this viewer to work
+// Note: we return 1 exchange and 1 exchange / action in these arrays, but we match the interface in the FLI strategy adapter to minimize keeper bot logic changes. We make the assumption that UniswapV3 and an UniswapV2 exchange (Sushi or TradeSplitter) is enabled in the adapter for this viewer to work
 function shouldRebalanceWithBounds(
     uint256 _customMinLeverageRatio,
     uint256 _customMaxLeverageRatio
@@ -640,40 +640,41 @@ function shouldRebalanceWithBounds(
     // Get total notional to rebalance from FLI adapter
     (bool isLever, uint256 notionalSendQuantity) = fliStrategyAdapter.getTotalRebalanceNotional();
 
-    // Get V3 trade path
-    bytes memory uniswapV3TradePath = isLever ? fliStrategyAdapter[uniswapV3ExchangeName].leverExchangeData : fliStrategyAdapter[uniswapV3ExchangeName].leverExchangeData;
-
-    // Get quote from Uniswap V3 SwapRouter
-    uint256 uniswapV3QuoteAmount = uniswapV3Quoter.quoteExactInput(uniswapV3TradePath, notionalSendQuantity);
-
-    // Get quote from Uniswap V2 Router
-    uint256 uniswapV2QuoteAmount = uniswapV2Router.getAmountsOut(notionalSendQuantity, uniswapV2TradePath)[uniswapV2TradePath.length.sub(1)];\\
-
     // Check shouldRebalanceWithBounds on strategy adapter
-    (string[] enabledExchanges, FlexibleLeverageStrategyAdapter.ShouldRebalance[]) = strategyAdapter.shouldRebalanceWithBounds(
+    (string[] enabledExchanges, FlexibleLeverageStrategyAdapter.ShouldRebalance[] rebalanceAction) = strategyAdapter.shouldRebalanceWithBounds(
         _customMinLeverageRatio,
         _customMaxLeverageRatio
     );
 
-    // Loop through array and find rebalance enum
+    // Loop through exchanges, get rebalance enum and max trade size associated with action
+    uint256 uniswapV3TradeQuantity;
+    uint256 uniswapV2TradeQuantity;
+    FlexibleLeverageStrategyAdapter.ShouldRebalance uniswapV3ShouldRebalance;
+    FlexibleLeverageStrategyAdapter.ShouldRebalance uniswapV2ShouldRebalance;
     for (uint256 i = 0; i < enabledExchanges.length; i++) {
-        if (
-            uniswapV3Quote > uniswapV2Quote
-            && enabledExchanges[i] == uniswapV3ExchangeName
-        ) {
-            return ([uniswapV3ExchangeName], [FlexibleLeverageStrategyAdapter.ShouldRebalance[i]])
+        if (enabledExchanges[i] == uniswapV3ExchangeName) {
+            uniswapV3TradeQuantity = rebalanceAction[i] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? Math.max(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.max(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].twapMaxTradeSize, notionalSendQuantity);
+            uniswapV3ShouldRebalance = rebalanceAction[i];
         }
 
-        if (
-            uniswapV3Quote <= uniswapV2Quote
-            && enabledExchanges[i] == uniswapV2ExchangeName
-        ) {
-            return ([uniswapV2ExchangeName], [FlexibleLeverageStrategyAdapter.ShouldRebalance[i]])
+        if (enabledExchanges[i] == uniswapV2ExchangeName) {
+            uniswapV2TradeQuantity = rebalanceAction[i] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? ? Math.max(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.max(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].twapMaxTradeSize, notionalSendQuantity);
+            uniswapV2ShouldRebalance = rebalanceAction[i];
         }
     }
+
+    // Get V3 trade path
+    bytes memory uniswapV3TradePath = isLever ? fliStrategyAdapter.exchangeSettings[uniswapV3ExchangeName].leverExchangeData : fliStrategyAdapter[uniswapV3ExchangeName].leverExchangeData;
+
+    // Get quote from Uniswap V3 SwapRouter
+    uint256 uniswapV3QuoteAmount = uniswapV3Quoter.quoteExactInput(uniswapV3TradePath, uniswapV3TradeQuantity);
+
+    // Get quote from Uniswap V2 Router
+    uint256 uniswapV2QuoteAmount = uniswapV2Router.getAmountsOut(uniswapV2TradeQuantity, uniswapV2TradePath)[uniswapV2TradePath.length.sub(1)];
+
+    return uniswapV3Quote > uniswapV2Quote ? ([uniswapV3ExchangeName], [uniswapV3ShouldRebalance]) : ([uniswapV2ExchangeName], [uniswapV2ShouldRebalance]);
 }
 ```
-
 
 
 
