@@ -583,11 +583,9 @@ function getTotalRebalanceNotional() external view returns (bool, uint256) {
 }
 ```
 
-### `FLIRebalanceViewer` [WIP]
+### `FLIRebalanceViewer`
 
-FLI Rebalance viewer that compares prices between Uniswap V3 and Uniswap V2 (or router with matching interface) and returns the exchangeName with better prices and the rebalance action in the FlexibleLeverageStrategyAdapter. Note: this is only limited to comparing one V3 and one V2-like exchange (Uniswap V2, Sushiswap, TradeSplitter)
-
-#### Enums
+FLI Rebalance viewer that compares prices between Uniswap V3 and Uniswap V2 (or router with matching interface) and returns the exchangeName with better prices and the rebalance action in the FlexibleLeverageStrategyAdapter. Note: this is only limited to comparing one V3 and one V2-like exchange (Uniswap V2, Sushiswap, TradeSplitter). Changelog: Remove pushing oracles as Compound upgrade to chainlink, and add ability to compare quotes
 
 #### Public Variables
 | Type  | Name  | Description   |
@@ -653,18 +651,18 @@ function shouldRebalanceWithBounds(
     FlexibleLeverageStrategyAdapter.ShouldRebalance uniswapV2ShouldRebalance;
     for (uint256 i = 0; i < enabledExchanges.length; i++) {
         if (enabledExchanges[i] == uniswapV3ExchangeName) {
-            uniswapV3TradeQuantity = rebalanceAction[i] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? Math.max(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.max(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].twapMaxTradeSize, notionalSendQuantity);
+            uniswapV3TradeQuantity = rebalanceAction[i] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].twapMaxTradeSize, notionalSendQuantity);
             uniswapV3ShouldRebalance = rebalanceAction[i];
         }
 
         if (enabledExchanges[i] == uniswapV2ExchangeName) {
-            uniswapV2TradeQuantity = rebalanceAction[i] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? ? Math.max(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.max(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].twapMaxTradeSize, notionalSendQuantity);
+            uniswapV2TradeQuantity = rebalanceAction[i] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].twapMaxTradeSize, notionalSendQuantity);
             uniswapV2ShouldRebalance = rebalanceAction[i];
         }
     }
 
-    // Get V3 trade path
-    bytes memory uniswapV3TradePath = isLever ? fliStrategyAdapter.exchangeSettings[uniswapV3ExchangeName].leverExchangeData : fliStrategyAdapter[uniswapV3ExchangeName].leverExchangeData;
+    // Get V3 trade path. The exchange data is the encoded path
+    bytes memory uniswapV3TradePath = isLever ? fliStrategyAdapter.exchangeSettings[uniswapV3ExchangeName].leverExchangeData : fliStrategyAdapter[uniswapV3ExchangeName].deleverExchangeData;
 
     // Get quote from Uniswap V3 SwapRouter
     uint256 uniswapV3QuoteAmount = uniswapV3Quoter.quoteExactInput(uniswapV3TradePath, uniswapV3TradeQuantity);
