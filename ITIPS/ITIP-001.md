@@ -644,33 +644,28 @@ function shouldRebalanceWithBounds(
         _customMaxLeverageRatio
     );
 
-    // Loop through exchanges, get rebalance enum and max trade size associated with action
-    uint256 uniswapV3TradeQuantity;
-    uint256 uniswapV2TradeQuantity;
-    FlexibleLeverageStrategyAdapter.ShouldRebalance uniswapV3ShouldRebalance;
-    FlexibleLeverageStrategyAdapter.ShouldRebalance uniswapV2ShouldRebalance;
-    for (uint256 i = 0; i < enabledExchanges.length; i++) {
-        if (enabledExchanges[i] == uniswapV3ExchangeName) {
-            uniswapV3TradeQuantity = rebalanceAction[i] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].twapMaxTradeSize, notionalSendQuantity);
-            uniswapV3ShouldRebalance = rebalanceAction[i];
-        }
+    Assume Uniswap V2 and Uniswap V3 are enabled as exchanges. TBD: do we want a 3rd exchange?
+    uint256 uniV3Index = enabledExchanges.indexOf(uniswapV3ExchangeName);
+    uint256 uniV2Index = enabledExchanges.indexOf(uniswapV2ExchangeName);
 
-        if (enabledExchanges[i] == uniswapV2ExchangeName) {
-            uniswapV2TradeQuantity = rebalanceAction[i] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].twapMaxTradeSize, notionalSendQuantity);
-            uniswapV2ShouldRebalance = rebalanceAction[i];
-        }
-    }
+    uint256 uniswapV3SendQuantity = rebalanceAction[uniV3Index] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV3Index]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV3Index]].twapMaxTradeSize, notionalSendQuantity);
+
+    uint256 uniswapV2SendQuantity = rebalanceAction[i] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].twapMaxTradeSize, notionalSendQuantity);
 
     // Get V3 trade path. The exchange data is the encoded path
     bytes memory uniswapV3TradePath = isLever ? fliStrategyAdapter.exchangeSettings[uniswapV3ExchangeName].leverExchangeData : fliStrategyAdapter[uniswapV3ExchangeName].deleverExchangeData;
 
     // Get quote from Uniswap V3 SwapRouter
-    uint256 uniswapV3QuoteAmount = uniswapV3Quoter.quoteExactInput(uniswapV3TradePath, uniswapV3TradeQuantity);
+    (uint256 uniswapV3ReceiveQuantity, , , ) = uniswapV3Quoter.quoteExactInput(uniswapV3TradePath, uniswapV3SendQuantity);
 
     // Get quote from Uniswap V2 Router
-    uint256 uniswapV2QuoteAmount = uniswapV2Router.getAmountsOut(uniswapV2TradeQuantity, uniswapV2TradePath)[uniswapV2TradePath.length.sub(1)];
+    uint256 uniswapV2ReceiveQuantity = uniswapV2Router.getAmountsOut(uniswapV2SendQuantity, uniswapV2TradePath)[uniswapV2TradePath.length.sub(1)];
 
-    return uniswapV3Quote > uniswapV2Quote ? ([uniswapV3ExchangeName], [uniswapV3ShouldRebalance]) : ([uniswapV2ExchangeName], [uniswapV2ShouldRebalance]);
+    // Divide to get ratio of quote / base asset. Don't care about decimals here. Standardizes to 10e18 with preciseDiv
+    uint256 uniswapV3Price = uniswapV3ReceiveQuantity.preciseDiv(uniswapV3SendQuantity);
+    uint256 uniswapV2Price = uniswapV2ReceiveQuantity.preciseDiv(uniswapV2SendQuantity);
+
+    return uniswapV3Price > uniswapV2Price ? ([uniswapV3ExchangeName], [rebalanceAction[uniV3Index]]) : ([uniswapV2ExchangeName], [rebalanceAction[uniV2Index]]);
 }
 ```
 
