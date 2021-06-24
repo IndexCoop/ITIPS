@@ -648,22 +648,22 @@ function shouldRebalanceWithBounds(
     uint256 uniV3Index = enabledExchanges.indexOf(uniswapV3ExchangeName);
     uint256 uniV2Index = enabledExchanges.indexOf(uniswapV2ExchangeName);
 
-    uint256 uniswapV3SendQuantity = rebalanceAction[uniV3Index] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV3Index]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV3Index]].twapMaxTradeSize, notionalSendQuantity);
+    uint256 uniswapV3ChunkSendQuantity = rebalanceAction[uniV3Index] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV3Index]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV3Index]].twapMaxTradeSize, notionalSendQuantity);
 
-    uint256 uniswapV2SendQuantity = rebalanceAction[i] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[i]].twapMaxTradeSize, notionalSendQuantity);
+    uint256 uniswapV2ChunkSendQuantity = rebalanceAction[uniV2Index] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV2Index]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV2Index]].twapMaxTradeSize, notionalSendQuantity);
 
     // Get V3 trade path. The exchange data is the encoded path
     bytes memory uniswapV3TradePath = isLever ? fliStrategyAdapter.exchangeSettings[uniswapV3ExchangeName].leverExchangeData : fliStrategyAdapter[uniswapV3ExchangeName].deleverExchangeData;
 
     // Get quote from Uniswap V3 SwapRouter
-    (uint256 uniswapV3ReceiveQuantity, , , ) = uniswapV3Quoter.quoteExactInput(uniswapV3TradePath, uniswapV3SendQuantity);
+    (uint256 uniswapV3ReceiveQuantity, , , ) = uniswapV3Quoter.quoteExactInput(uniswapV3TradePath, uniswapV3ChunkSendQuantity);
 
     // Get quote from Uniswap V2 Router
-    uint256 uniswapV2ReceiveQuantity = uniswapV2Router.getAmountsOut(uniswapV2SendQuantity, uniswapV2TradePath)[uniswapV2TradePath.length.sub(1)];
+    uint256 uniswapV2ReceiveQuantity = uniswapV2Router.getAmountsOut(uniswapV2ChunkSendQuantity, uniswapV2TradePath)[uniswapV2TradePath.length.sub(1)];
 
     // Divide to get ratio of quote / base asset. Don't care about decimals here. Standardizes to 10e18 with preciseDiv
-    uint256 uniswapV3Price = uniswapV3ReceiveQuantity.preciseDiv(uniswapV3SendQuantity);
-    uint256 uniswapV2Price = uniswapV2ReceiveQuantity.preciseDiv(uniswapV2SendQuantity);
+    uint256 uniswapV3Price = uniswapV3ReceiveQuantity.preciseDiv(uniswapV3ChunkSendQuantity);
+    uint256 uniswapV2Price = uniswapV2ReceiveQuantity.preciseDiv(uniswapV2ChunkSendQuantity);
 
     return uniswapV3Price > uniswapV2Price ? ([uniswapV3ExchangeName], [rebalanceAction[uniV3Index]]) : ([uniswapV2ExchangeName], [rebalanceAction[uniV2Index]]);
 }
