@@ -182,7 +182,7 @@ To start we will revisit the current rebalance flow:
 - `disengage()`
 - `shouldRebalance`
     - Returns ShouldRebalance enum and exchanges that can be used
-- `getTotalRebalanceNotional`
+- `getChunkRebalanceNotional`
     - Helper to get the expected total notional rebalance size
 - `setExchangeSettings`
     - Added to contract
@@ -573,10 +573,10 @@ function removeExchange(string memory _exchangeName) external onlyOperator noReb
 }
 ```
 
-> function getTotalRebalanceNotional()
+> function getChunkRebalanceNotional()
 
 ```solidity
-function getTotalRebalanceNotional() external view returns (bool, uint256) {
+function getChunkRebalanceNotional() external view returns (bool, uint256) {
     // Either use existing internal functions or recreate logic that reduces unnecessary calls
 
     // Return boolean indicating whether to lever or delever, and uint256 of the asset notional being sold (collateral units for delever and borrow units for lever). May require an oracle calculation
@@ -635,22 +635,19 @@ function shouldRebalanceWithBounds(
     view
     returns(string[] memory, FlexibleLeverageStrategyAdapter.ShouldRebalance[] memory)
 {
-    // Get total notional to rebalance from FLI adapter
-    (bool isLever, uint256 notionalSendQuantity) = fliStrategyAdapter.getTotalRebalanceNotional();
-
     // Check shouldRebalanceWithBounds on strategy adapter
     (string[] enabledExchanges, FlexibleLeverageStrategyAdapter.ShouldRebalance[] rebalanceAction) = strategyAdapter.shouldRebalanceWithBounds(
         _customMinLeverageRatio,
         _customMaxLeverageRatio
     );
 
-    Assume Uniswap V2 and Uniswap V3 are enabled as exchanges. TBD: do we want a 3rd exchange?
+    // Assume Uniswap V2 and Uniswap V3 are enabled as exchanges. TBD: do we want a 3rd exchange?
     uint256 uniV3Index = enabledExchanges.indexOf(uniswapV3ExchangeName);
     uint256 uniV2Index = enabledExchanges.indexOf(uniswapV2ExchangeName);
 
-    uint256 uniswapV3ChunkSendQuantity = rebalanceAction[uniV3Index] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV3Index]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV3Index]].twapMaxTradeSize, notionalSendQuantity);
-
-    uint256 uniswapV2ChunkSendQuantity = rebalanceAction[uniV2Index] == FlexibleLeverageStrategyAdapter.ShouldRebalance.RIPCORD ? ? Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV2Index]].incentivizedTwapMaxTradeSize, notionalSendQuantity) : Math.min(fliStrategyAdapter.exchangeSettings[enabledExchanges[uniV2Index]].twapMaxTradeSize, notionalSendQuantity);
+    // Get notional to rebalance from FLI adapter for V3 and V2
+    (bool isLever, uint256 uniswapV3ChunkSendQuantity) = fliStrategyAdapter.getChunkRebalanceNotional(enabledExchange[uniV3Index]);
+    ( , uint256 uniswapV2ChunkSendQuantity) = fliStrategyAdapter.getChunkRebalanceNotional(enabledExchange[uniV2Index]);
 
     // Get V3 trade path. The exchange data is the encoded path
     bytes memory uniswapV3TradePath = isLever ? fliStrategyAdapter.exchangeSettings[uniswapV3ExchangeName].leverExchangeData : fliStrategyAdapter[uniswapV3ExchangeName].deleverExchangeData;
