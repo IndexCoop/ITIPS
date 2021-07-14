@@ -1,4 +1,4 @@
-# ITIP-[xx]
+# ITIP-001
 *Using template v0.1*
 ## Abstract
 We want to be able to increase the trade size for FLI products while maintaining a low target level of slippage. Increasing the trade size allows for FLI products to delever faster and take on greater amounts of capital while not compromising on the saefty of the product. Additionally, larger trade sizes cut down on the operating expenses of maintaining FLI products by reducing the amount of transactions necessary to rebalance.
@@ -671,12 +671,12 @@ function shouldRebalanceWithBounds(
 ## Checkpoint 3
 Before we move onto the implementation phase we want to make sure that we are aligned on the spec. All contracts should be specced out, their state and external function signatures should be defined. For more complex contracts, internal function definition is preferred in order to align on proper abstractions. Reviewer should take care to make sure that all stake holders (product, app engineering) have their needs met in this stage.
 
-**Reviewer**:
+**Reviewer**: @richardliang
 
 ## Implementation
-[Link to implementation PR]()
+[Link to implementation PR](https://github.com/SetProtocol/index-coop-smart-contracts/pull/59)
 ## Documentation
-[Link to Documentation on feature]()
+[Link to Documentation on feature](https://docs.indexcoop.com/our-products/flexible-leverage-indices/fli-technical-documentation/fli-keeper-bot-integration)
 ## Deployment
-[Link to Deployment script PR]()  
-[Link to Deploy outputs PR]()
+[Link to Deployment script PR](https://github.com/SetProtocol/index-deployments/pulls?q=is%3Apr+is%3Aclosed)  
+[Link to Deploy outputs PR](https://github.com/SetProtocol/index-deployments/pull/60)
