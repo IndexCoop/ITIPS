@@ -20,8 +20,7 @@ the operator's flexibility with regard to updating extensions and modules more g
 The [original Index Manager Contract][1] defined fee management functions and gated them
 with a [mutualUpgrade][2] modifier which required both operator and methodologist consent for any changes.
 
-In early 2021 Index Coop developed a new model for management contracts which delegates most functionality to extension contracts. This architecture separates concerns in a way that lets Index engineers easily adapt and upgrade
-Index features.
+In early 2021 Index Coop developed a new Manager system which delegates most functionality to extension contracts. This architecture separates concerns in a way that lets Index engineers easily upgrade Index token features.
 
 The [FeeSplitAdapter][6] and [StreamingFeeSplitExtension][3] contract developed for the new system gates fee changing methods with the `onlyOperator` modifier. In July, the DefiPulse methodologist expressed concern about this change - they are declining to migrate to the new system unless their existing fee prerogatives are preserved.
 
@@ -42,7 +41,6 @@ In order to comply with the Index community's requirement that fee arrangements 
 Contracts of concern to implement the required changes include:
 
 + [BaseManager][4]
-+ [BaseAdapter][5]
 + [FeeSplitAdapter][6] (only used on FLI products atm)
 + [StreamingFeeSplitExtension][7]
 
@@ -55,7 +53,9 @@ Contracts of concern to implement the required changes include:
 [7]: https://github.com/SetProtocol/index-coop-smart-contracts/blob/master/contracts/adapters/FlexibleLeverageStrategyExtension.sol
 
 ## Open Questions
-- [ ]
+- [ ] What are the drawbacks to delegating more authority to the methodologist?
+- [ ] Are there any extension operations for which the possibility of a methodologist veto poses unacceptable
+      risks?
 
 ## Feasibility Analysis
 
@@ -77,10 +77,10 @@ contracts so fees accrue to directly to themselves - by definition they'll be ap
 
 **Delegation of Authority**
 
-Finally, at the core of this upgrade is a dillema about finding a balance between protecting methodologist
+At the core of this upgrade is a dillema about finding a balance between protecting methodologist
 prerogatives and ensuring that Index Coop's engineering team can add features efficiently.
 
-Unfortunately, there is no programmatic way of guaranteeing *before the fact* that an extension with arbitary permissions doesn't interact with a new module which might impair methodologists' fees.
+Unfortunately, there is no programmatic way of guaranteeing *before the fact* that an extension with arbitary permissions doesn't interact with a new module which might affect methodologists' fees.
 
 One solution is to give the methodologist sole authority to manage which modules are protected and which extensions are allowed to interact with them. This would let the methodologist veto any functional changes to the Index they
 disagree with by:
