@@ -15,23 +15,18 @@ This issue is being deliberated by the Index Community as [IIP-64][21]
 
 [21]: https://gov.indexcoop.com/t/iip-64-methodologist-smart-contract-permissioning/2200
 
-We want to implement a new permissions model for the manager that lets us configure which kinds of functionality
-are strongly or weakly permissioned. We need to be able to restrict fee changes as requested while preserving
-the operator's flexibility with regard to updating extensions and modules more generally.
+We want to implement a new permissions model for the manager that lets us configure which kinds of functionality are strongly or weakly permissioned. We need to be able to restrict fee changes as requested while preserving the operator's flexibility to update extensions and modules more generally.
 
 ## Background Information
 
 The [original Index Manager Contract][1] defined fee management functions and gated them
 with a [mutualUpgrade][2] modifier which required both operator and methodologist consent for any changes.
 
-In early 2021 Index Coop developed a new Manager system which delegates most functionality to extension contracts.
-Its architecture helps Index engineers adhere to common "separation of concerns" software design principles
-and easily upgrade Index token features.
+In early 2021 Index Coop developed a new Manager system which delegates most functionality to extension contracts. Its architecture helps Index engineers adhere to common "separation of concerns" software design principles and easily upgrade Index token features.
 
-The [FeeSplitAdapter][6] and [StreamingFeeSplitExtension][3] contract developed for the new system restricts fee changing methods with the `onlyOperator` modifier. In July, the DefiPulse methodologist expressed concern about this change. They are declining to migrate to the new system unless their existing fee prerogatives are preserved.
+The [FeeSplitAdapter][6] and [StreamingFeeSplitExtension][3] contracts developed for the new system restrict fee changing methods with the `onlyOperator` modifier. In July, the DefiPulse methodologist expressed concern about this change. They are declining to migrate to the new system unless their existing fee prerogatives are preserved.
 
-The new system's `BaseManager` contract has a small set of methods that permit module and
-extension additions and removals.
+The new system's `BaseManager` contract has a small set of methods that permit module and extension additions and removals.
 
 By design, the operator is free to add extensions and modules at will and
 + extensions can call any module
@@ -60,8 +55,11 @@ Contracts affected by the required changes include:
 
 ## Open Questions
 - [ ] What are the drawbacks to delegating more authority to the methodologist?
-- [ ] Are there any extension contract operations for which the possibility of a methodologist veto poses unacceptable
-      risks?
+  + *Answer* The methodologist might abuse this power. They could withold consent for contract
+  upgrades to gain leverage in negotiations over unrelated matters. Granting the methodologist more control over the Manager contract complicates the operational environment for engineers designing the system. It introduces unknowns about which extensions might be enabled for a token and when.
+
+- [ ] Are there any extension contract operations for which the possibility of a methodologist veto poses unacceptable risks?
+  + *Answer* We likely can't answer this with "no" and have a confidence interval in the high 90s, so the answer is effectively "yes". We should assume that unexpectedly disabling an extension could break assumptions in the system with negative consequences.
 
 ## Feasibility Analysis
 
@@ -71,25 +69,20 @@ Restoring the `mutualUpgrade` modifier to the relevant fee methods to FeeSplitEx
 
 **BaseManager Permissions**
 
-The BaseManager contract will need finer grained permissions for methods that route module calls. A simple way of achieving this is to add a `protectedModules` mapping to the Manager which allows the methodologist to register sensitive
-modules and define which extensions may call them. **New modules would be unprotected by default**.
+The BaseManager contract will need finer grained permissions for methods that route module calls. A simple way of achieving this is to add a `protectedModules` mapping to the Manager which allows the methodologist to register sensitive modules and define which extensions may call them. **New modules would be unprotected by default**.
 
 **Fee Security**
 
 At the moment, the `BaseManager` is the receipient of fees prior to distribution and fee accrual
-can be initiated by anyone as an atomic step (via the `StreamingFee` module). This arrangement exposes the fees to
-extensions that might not conform to Index Community fee requirements. We should update `FeeExtension`
-contracts so fees accrue to directly to themselves - by definition they'll be appropriately permissioned.
+can be initiated by anyone as an atomic step (via the `StreamingFee` module). This arrangement exposes the fees to extensions that might not conform to Index Community fee requirements. We should update `FeeExtension` contracts so fees accrue to directly to themselves - by definition they'll be appropriately permissioned.
 
 **Delegation of Authority**
 
-At the core of this upgrade is a dillema about finding the correct balance between protecting methodologist
-prerogatives and ensuring that Index Coop's engineering team can add features efficiently.
+At the core of this upgrade is a dillema about finding the correct balance between protecting methodologist prerogatives and ensuring that Index Coop's engineering team can add features both safely and efficiently.
 
 Unfortunately, there is no programmatic way of guaranteeing *before the fact* that an extension with arbitary permissions doesn't interact with a new module which might affect methodologists' fees.
 
-One solution is to give the methodologist sole authority to manage which modules are protected and which extensions are allowed to interact with them. This would let the methodologist veto any functional changes to the Index they
-disagree with by:
+One solution is to give the methodologist sole authority to manage which modules are protected and which extensions are allowed to interact with them. This would let the methodologist veto any functional changes to the Index they disagree with by:
 
 + restricting the permissions of modules it has concerns about
 + declining to grant unwelcome extensions access to protected modules
@@ -153,29 +146,40 @@ The following existing methods would have their modifiers updated
 The `BaseManager` would be upgraded to include a new permissions data structure
 
 ```solidity
+// Defines modules which can only be called by authorized extensions
+mapping(address => bool) public protectedModules;
+
 // Defines modules which can only be accessed by a specific list of extensions
-mapping(address => address[]) public protectedModules;
+mapping(address => address[]) public authorizedExtensions;
+
+// **ONLY METHODOLOGIST** Marks a module protected.
+function protectModule(address _module)
+
+// **ONLY METHODOLOGIST** Revokes a modules protected status and deletes the list of authorized
+// extensions associated with it.
+function unProtectModule(address _module)
 
 // **ONLY METHODOLOGIST** Marks a module protected (if not already) and grants an extension
 // permission to interact with it
-function addExtensionForProtectedModule(address _module, address _extension);
+function authorizeExtensionForProtectedModule(address _module, address _extension);
 
 // **ONLY METHODOLOGIST** Removes an extension's ability to interact with a module
-function removeExtensionForProtectedModule(address _module, address _extension);
-
-// **ONLY METHODOLOGIST** Remove a module from the protected modules mapping
-function removeAllModuleProtections(address module)
+function revokeExtensionForProtectedModule(address _module, address _extension);
 
 // Events
-event ProtectedModuleExtensionAdded(address module, address extension)
-event ProtectedModuleExtensionRemoved(address module, address extension)
-event ModuleProtectionsRemoved(address module)
+event ProtectedModuleExtensionAdded(address _module, address _extension)
+event ProtectedModuleExtensionRemoved(address _module, address _extension)
+event ModuleProtected(address _module)
+event ModuleUnprotected(address _module)
+
+// Getters
+// **ANYONE CAN CALL** Retrieves the list of extensions authorized for `_module`
+function getAuthorizedExtensions(address _module)
 ```
 
 **Existing Methods Changes**
 
-`interactManager` would be modified to check whether its `module` target was
-protected and whether the extension contract invoking it was allowed to call.
+`interactManager` would be modified to check whether its `module` target was protected and whether the extension contract invoking it was allowed to call.
 
 
 ## Requirements
