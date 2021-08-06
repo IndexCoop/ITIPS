@@ -93,8 +93,7 @@ The methodologist's authority to restrict extensions must be constrained to a de
 It's also necessary that the operator be able to add and remove modules at will to address critical code vulnerabilities and bugs.
 
 We propose that when the operator adds modules, the methodologist be able to classify them as
-protected within a designated review period. Thereafter they will be required to explicitly enable extension for the protected module. The table below shows the possible state conditions
-under this model.
+protected within a designated review period. Thereafter they will be required to explicitly enable extensions for the protected module. The methodologist is free to revoke a module's protected status at any time. The table below shows the possible state conditions under this model.
 
 **Protected State Conditions**
 
