@@ -19,8 +19,7 @@ We want to implement a new permissions model for the manager that lets us config
 
 ## Background Information
 
-The [original Index Manager Contract][1] defined fee management functions and gated them
-with a [mutualUpgrade][2] modifier which required both operator and methodologist consent for any changes.
+The [original Index Manager Contract][1] defined fee management functions and gated them with a [mutualUpgrade][2] modifier which required both operator and methodologist consent for any changes.
 
 In early 2021 Index Coop developed a new Manager system which delegates most functionality to extension contracts. Its architecture helps Index engineers adhere to common "separation of concerns" software design principles and easily upgrade Index token features.
 
@@ -82,12 +81,39 @@ At the core of this upgrade is a dillema about finding the correct balance betwe
 
 Unfortunately, there is no programmatic way of guaranteeing *before the fact* that an extension with arbitary permissions doesn't interact with a new module which might affect methodologists' fees.
 
-One solution is to give the methodologist sole authority to manage which modules are protected and which extensions are allowed to interact with them. This would let the methodologist veto any functional changes to the Index they disagree with by:
+One solution is to give the methodologist authority to manage which modules are protected and which extensions are allowed to interact with them. This would let the methodologist veto any functional changes to the Index they disagree with by:
 
 + restricting the permissions of modules it has concerns about
-+ declining to grant unwelcome extensions access to protected modules
++ requiring that extensions be authorized to access protected modules
 
 In the current system the operator is given broad latitude to improve the contracts and asks the methodologist to trust that it will not act in bad faith with respect to fees. We would swap this arrangement for one in which the methodologist has more authority and the operator must trust that the methodologist will strike a viable balance between engineering quality and direct operational control.
+
+The methodologist's authority to restrict extensions must be constrained to a defined period of review. This is a basic critical systems engineering requirement. The operator cannot meet their obligation to build safe smart contracts if they are unable to make assumptions about which modules and extensions are operational.
+
+It's also necessary that the operator be able to add and remove modules at will to address critical code vulnerabilities and bugs.
+
+We propose that when the operator adds modules, the methodologist be able to classify them as
+protected within a designated review period. Thereafter they will be required to explicitly enable extension for the protected module. The table below shows the possible state conditions
+under this model.
+
+**Protected State Conditions**
+
+| Review period | Module State | Operator | Methodologist | Outcome |
+| ---- | ----- | ---- | ---- | ---- |
+| active | n/a | Adds module | protects module | all future extensions must be authorized |
+| active | n/a | Adds module | does nothing | all extensions enabled |
+| active | n/a | Adds module and extension | protects module | current extension disabled until authorized, future extensions must be authorized |
+| active | protected | n/a | un-protects module | all extensions enabled, methodologist may still protect module while review window is open  |
+| elapsed | protected | n/a | un-protects module | all extensions enabled |
+| elapsed | protected | Adds extension | approves extension | extension enabled |
+| elapsed | protected | Adds extension | does nothing | extension disabled |
+| elapsed | unprotected | Adds extension |  n/a | extension enabled |
+
+**Summary**
++ Modules are unprotected by default
++ Methodologists can only protect a module within a designated review period which begins when the module is added by the operator.
++ Methodologists must approve extensions for protected modules to enable calls between extension and module.
++ Methodologists cannot remove authorization from an extension once granted
 
 ## Timeline
 
@@ -152,19 +178,15 @@ mapping(address => bool) public protectedModules;
 // Defines modules which can only be accessed by a specific list of extensions
 mapping(address => address[]) public authorizedExtensions;
 
-// **ONLY METHODOLOGIST** Marks a module protected.
+// **ONLY METHODOLOGIST, WITHIN MODULE ADDITION REVIEW PERIOD** Marks a module protected.
 function protectModule(address _module)
 
 // **ONLY METHODOLOGIST** Revokes a modules protected status and deletes the list of authorized
 // extensions associated with it.
 function unProtectModule(address _module)
 
-// **ONLY METHODOLOGIST** Marks a module protected (if not already) and grants an extension
-// permission to interact with it
+// **ONLY METHODOLOGIST** Grants an extension permission to interact with protected module
 function authorizeExtensionForProtectedModule(address _module, address _extension);
-
-// **ONLY METHODOLOGIST** Removes an extension's ability to interact with a module
-function revokeExtensionForProtectedModule(address _module, address _extension);
 
 // Events
 event ProtectedModuleExtensionAdded(address _module, address _extension)
