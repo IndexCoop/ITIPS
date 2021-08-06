@@ -7,7 +7,7 @@ The Index community wants to modify the existing Manager Contracts to remove the
 (designated as the `operator` in the Manager contracts) to unilaterally change the:
 + fee
 + fee split
-+ fee recipient amounts
++ fee recipient
 
 They require that **both** the Index Coop and external methodologists approve any changes related to these 3 parameters.
 
