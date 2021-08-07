@@ -93,7 +93,7 @@ Below we sketch two strategies to balance these requirements and evaluate their 
 This model for *BaseManager* has the following properties:
 + fee specific module and extension identities are initialized on deployment in the manager contract constructor
 + the manager contract must be enabled by the methodologist before it can begin operation
-+ updates to fee modules and extension identities can only be performed by mutual upgrade
++ updates to fee modules and extension identities can only be performed by mutual upgrade, except under emergency conditions
 
 Protections are enforced in the *BaseManager* `interactManager` function by requiring that any calls forwarded to the dedicated fee module are made by an authorized fee extension.
 
