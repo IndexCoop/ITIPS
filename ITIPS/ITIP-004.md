@@ -101,7 +101,7 @@ The operator retains the ability to remove the streaming fee module from the Set
 
 We can mitigate this risk for the methodologist by making the fee module and extensions impossible to remove unilaterally but this exposes us to significant operational dangers if either contract has bugs.
 
-To address that problem we'd need to define emergency removal methods that let the operator de-activate problematic contracts. To make sure these methods weren't misused as a backdoor to alter fee arrangements we'd likely need freeze further upgrades to the BaseManager at the same time. For security reasons, the operator would retain the ability to remove modules and extensions while upgrades were frozen.
+To address that problem we'd need to define emergency removal methods that let the operator de-activate problematic contracts. To make sure these methods weren't misused as a backdoor to alter fee arrangements we'd likely need to freeze further upgrades to the BaseManager at the same time. For security reasons, the operator would retain the ability to remove modules and extensions while upgrades were frozen.
 
 The freeze could be resolved with a mechanism that lets the methodologist re-enable upgrades while adding and authorizing new fee contracts.
 
