@@ -114,7 +114,7 @@ The freeze could be resolved with a mechanism that lets the methodologist re-ena
 | deployed | inactive | n/a | authorizes | *interactManager* enabled / fee contracts active |
 | active | active | upgrades fee contract(s) | does nothing | no change |
 | active | active | upgrades fee contract(s) | authorizes | new fee contracts active |
-| active | defined, active | emergency removes fee contract(s) | n/a | fee contracts inactive / upgrades blocked |
+| active | active | emergency removes fee contract(s) | n/a | fee contracts inactive / upgrades blocked |
 | upgrades blocked | inactive | n/a | does nothing | fee contracts inactive / upgrades blocked |
 | upgrades blocked | inactive | n/a | emergency upgrades fee contract(s) | new fee contracts active / upgrades re-enabled |
 
