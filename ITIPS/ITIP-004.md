@@ -66,10 +66,6 @@ Contracts affected by the required changes include:
 
 Restoring the `mutualUpgrade` modifier to the relevant fee methods to FeeSplitExtensions is straightforward.
 
-### BaseManager Permissions
-
-The BaseManager contract will need finer grained permissions for methods that route module calls. A simple way of achieving this is to add `protectedModules` mappings to the Manager which allow stakeholders to register sensitive modules and define which extensions may call them. **New modules would be unprotected by default**.
-
 ### Fee Security
 
 At the moment, the `BaseManager` is the receipient of fees prior to distribution and fee accrual
