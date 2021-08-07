@@ -117,6 +117,7 @@ The freeze could be resolved with a mechanism that lets the methodologist re-ena
 | active | active | emergency removes fee contract(s) | n/a | fee contracts inactive / upgrades blocked |
 | upgrades blocked | inactive | n/a | does nothing | fee contracts inactive / upgrades blocked |
 | upgrades blocked | inactive | n/a | emergency upgrades fee contract(s) | new fee contracts active / upgrades re-enabled |
+| active | active | n/a | emergency upgrades fee contract(s) | no change |
 
 
 #### Delegation of Authority
