@@ -82,7 +82,7 @@ A solution has to take the following constraints into consideration:
 
 Below we sketch two strategies to balance these requirements and evaluate their risks for both methodologists and operators.
 
-#### Static Streaming Fee Extension with Permissioned Manager Initialization
+#### Protected Fee Contracts with Permissioned Manager Initialization
 
 --------
 
@@ -114,7 +114,7 @@ The freeze could be resolved with a mechanism that lets the methodologist re-ena
 | deployed | inactive | n/a | authorizes | *interactManager* enabled / fee contracts active |
 | active | active | upgrades fee contract(s) | does nothing | no change |
 | active | active | upgrades fee contract(s) | authorizes | new fee contracts active |
-| active | defined, active | emergency removes feeExtension or Module | n/a | fee contracts inactive / upgrades blocked |
+| active | defined, active | emergency removes fee contract(s) | n/a | fee contracts inactive / upgrades blocked |
 | upgrades blocked | inactive | n/a | does nothing | fee contracts inactive / upgrades blocked |
 | upgrades blocked | inactive | n/a | emergency upgrades fee contract(s) | new fee contracts active / upgrades re-enabled |
 
