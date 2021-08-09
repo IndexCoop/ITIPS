@@ -57,7 +57,7 @@ Contracts affected by the required changes include:
   + *Answer* The methodologist might abuse this power. They could withold consent for contract
   upgrades to gain leverage in negotiations over unrelated matters. It complicates the operational environment for engineers by introducing unknowns about which extensions might be enabled for a module and when.
 
-- [ ] Are there any extension contract operations for which the possibility of a methodologist veto poses unacceptable risks?
+- [ ] Are there any extension contract operations for which the possibility of a (retroactive) methodologist veto poses unacceptable risks?
   + *Answer* We can't confidently answer this with "no", so the answer is effectively "yes". We should assume that unexpectedly disabling an extension could break assumptions in the system with negative consequences.
 
 ## Feasibility Analysis
@@ -109,9 +109,9 @@ The freeze could be resolved with a mechanism that lets the methodologist re-ena
 
 | Stage | Fee Contracts | Operator | Methodologist | Outcome |
 | ----  | ----- | ---- | ---- | ---- |
-| deployment | inactive | deploys, configures modules etc | n/a | *interactManager* frozen |
+| deployment | inactive | deploys, add modules and extensions | n/a | *interactManager* frozen |
 | deployed | inactive | n/a | does nothing | *interactManager* frozen |
-| deployed | inactive | n/a | authorizes | *interactManager* enabled / fee contracts active |
+| deployed | inactive | n/a | authorizes | *interactManager* enabled / fee contracts can be actived by operator |
 | active | active | upgrades fee contract(s) | does nothing | no change |
 | active | active | upgrades fee contract(s) | authorizes | new fee contracts active |
 | active | active | emergency removes fee contract(s) | n/a | fee contracts inactive / upgrades blocked |
@@ -124,23 +124,23 @@ The freeze could be resolved with a mechanism that lets the methodologist re-ena
 
 -------
 
-Another approach is to give the methodologist broad authority to manage which modules are protected and which extensions are allowed to interact with them. This would let the methodologist veto any functional changes to the Index they disagree with by:
+Another approach is to give the methodologist broad authority to manage which modules are protected and which extensions are allowed to interact with them. In this model, the methodologist would be able to veto any functional changes to the Index they disagree with by:
 
 + restricting the permissions of modules it has concerns about
 + requiring that extensions be authorized to access protected modules
 
-The methodologist's ability to restrict extensions would be limited to a defined period of review to satisfy the requirement that the operator have durable guarantees about which modules and extensions are enabled.
+To satisfy the engineering requirement that the operator have durable guarantees about which modules and extensions are enabled, the methodologist's ability to restrict extensions would be limited to a defined period of review.
 
 **Risks**
 
 The methodologist may:
-+ try to class all new modules as protected because they are paranoid, making the operation of index unworkable.
++ try to class all new modules as protected making operation of the index difficult to manage.
 + abuse their power to protect modules to gain leverage in negotiations with the community
 + extort concessions from the operator whenever extension upgrades benefit the operator.
 
-For example, suppose the operator shoulders execution costs for some aspect of the system and discovers a way to reduce these by changing the manager's underlying contracts. The methodologist could demand that fees be renegotiated in their favor before enabling the new contracts to capture some of these gains (despite having done nothing to earn them).
+For example, suppose the operator shoulders execution costs for some aspect of the system and discovers a way to reduce these by upgrading the manager's module contracts. The methodologist could demand that fees be renegotiated in their favor before enabling the new contracts to capture some of these gains (despite having done nothing to earn them).
 
-These risks could be mitigated by designing a mechanism that lets the community vote to revoke a methodologist's module protection. Ultimately, this option returns the methodologist to square one with respect to whether their fees can be altered without their consent - e.g they can, by popular vote.
+These risks could be mitigated by designing a mechanism that lets the community vote to revoke a methodologist's protection of a given module. Ultimately, this option returns the methodologist to square one with respect to whether their fees can be altered without their consent - e.g they can, by popular vote.
 
 **Protected State Conditions**
 
