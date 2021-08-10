@@ -15,6 +15,7 @@ The wrap module does not allow slippage checks. This can potentially cause probl
 ## Open Questions
 - How do we handle rebalancing curve LP positions?
     - potential solution involves trading WETH -> stablecoin -> 3Pool LP position -> curve metapool LP position
+    - easier solution (but not necessarily lowest slippage) is WETH -> stablecoin -> curve metapool LP position
     - Yearn lets you zap into their vaults. Should we hook into their zap functionality for rebalancing?
 - When do we need to sync positions?
     - At minimum before issuance, redemption, and after claiming COMP and AAVE rewards
@@ -27,9 +28,14 @@ Add a IntrinsicProductivityExtension for managing the wrapping, unwrapping, and 
 Add a SyncPositionsHook for syncing positions
 - Used before issuance, redemption, and after claiming AAVE and COMP tokens
 
-Add YearnZapIndexExchangeAdapter
-- Allows us to zap into and out of yearn vaults to/from WETH
-- No need to use a zap to a curve LP and a wrap to the yearn vault. Can all be both be done simultaneously while rebalancing
+Handling Curve
+- Can use Zapper to zap into and out of yearn vaults (including curve yearn vaults) to/from WETH
+    - No exact output zap in
+    - No exact output zap out
+- Can also just rebalance into the non-3Pool token in the curve pool
+    - after rebalance use wrap/trade module to enter curve LP
+    - then use wrap module to enter yearn vault
+
 
 ## Timeline
 finish spec: 8/13
