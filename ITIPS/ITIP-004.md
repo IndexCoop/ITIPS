@@ -73,94 +73,62 @@ can be initiated by anyone as an atomic step (via the `StreamingFee` module). Th
 
 ### Module and Extension Updates
 
-At the core of this ITIP is a dillema about finding the right balance between protecting methodologist prerogatives and ensuring that Index Coop's engineering team can operate the
-system securely.
+At the core of this ITIP is a dillema about finding the right balance between protecting methodologist prerogatives and ensuring that Index Coop's engineering team can operate the system securely.
 
 A solution has to take the following constraints into consideration:
 1. the operator must be able to add and remove modules and extensions at will to mitigate vulnerabilities and fix bugs
 2. to design system interactions safely, the operator must have durable guarantees about which modules and extensions are enabled
 
-Below we sketch two strategies to balance these requirements and evaluate their risks for both methodologists and operators.
+Below we sketch a strategy to balance these requirements and evaluate their risks for both methodologists and operators.
 
-#### Protected Fee Contracts with Permissioned Manager Initialization
+#### Protected Modules with Permissioned Manager Initialization
 
 --------
 
-This model for *BaseManager* has the following properties:
-+ fee specific module and extension identities are initialized on deployment in the manager contract constructor
+The permissions model proposed for *BaseManager* has the following properties:
++ supports a registry of protected modules and defines which extensions may call them
++ protected modules are initialized on deployment in the manager contract constructor
 + the manager contract must be enabled by the methodologist before it can begin operation
-+ updates to fee modules and extension identities can only be performed by mutual upgrade, except under emergency conditions
++ updates to protected modules can only be performed by mutual upgrade, except under emergency conditions
++ extensions authorized for protected modules cannot be unilateraly removed, except under emergency conditions
 
-Protections are enforced in the *BaseManager* `interactManager` function by requiring that any calls forwarded to the dedicated fee module are made by an authorized fee extension.
+Protections are enforced in the *BaseManager* `interactManager` function by requiring that any calls forwarded to a protected module are made by an authorized extension.
 
-This arrangement is the same as the one implemented in the original *ICManager* contract, with small changes to preserve modular design and upgradeability features introduced by the new Manager system.
+This arrangement has the same permissions as the one implemented in the original *ICManager* contract, with small changes to preserve modular design and upgradeability features introduced by the new Manager system.
 
 **Risks**
 
-The operator retains the ability to remove the streaming fee module from the SetToken and change fee arrangements with new extensions and modules.
+The methodologist needs guarantees that protected modules cannot be unilaterally swapped out. This requirement has to be implemented in a way that lets the operator intervene immediately if vulnerabilities or bugs are discovered in any contracts.
 
-We can mitigate this risk for the methodologist by making the fee module and extensions impossible to remove unilaterally but this exposes us to significant operational dangers if either contract has bugs.
+To accomplish this we propose adding emergency removal methods that let the operator de-activate protected modules. These methods would freeze any further upgrades to the BaseManager, ensuring that they can't be misused as a backdoor to alter fee arrangements. (For security reasons, the operator would retain the ability to remove other modules and extensions while upgrades are frozen.)
 
-To address that problem we'd need to define emergency removal methods that let the operator de-activate problematic contracts. To make sure these methods weren't misused as a backdoor to alter fee arrangements we'd likely need to freeze further upgrades to the BaseManager at the same time. For security reasons, the operator would retain the ability to remove modules and extensions while upgrades were frozen.
+To resolve the freeze, the methodologist would need to approve an emergency replacement of the protected modules at issue.
 
-The freeze could be resolved with a mechanism that lets the methodologist re-enable upgrades while adding and authorizing new fee contracts.
+In sum, the operator's power to execute an emergency removal is counterbalanced by the methodologists power to prevent normal upgrades until they authorize a new protected module arrangement.
 
-**Fee Contract & BaseManager State Conditions**
+**State Transition Table: Overview**
 
-| Stage | Fee Contracts | Operator | Methodologist | Outcome |
+| Stage | Protected Module | Operator | Methodologist | Outcome |
 | ----  | ----- | ---- | ---- | ---- |
-| deployment | inactive | deploys, add modules and extensions | n/a | *interactManager* frozen |
+| deployment | inactive | deploys, registers permissioned modules and their authorized extensions | n/a | *interactManager* frozen, regular modules and extensions can be added |
 | deployed | inactive | n/a | does nothing | *interactManager* frozen |
-| deployed | inactive | n/a | authorizes | *interactManager* enabled / fee contracts can be actived by operator |
-| active | active | upgrades fee contract(s) | does nothing | no change |
-| active | active | upgrades fee contract(s) | authorizes | new fee contracts active |
-| active | active | emergency removes fee contract(s) | n/a | fee contracts inactive / upgrades blocked |
-| upgrades blocked | inactive | emergency upgrades fee contract(s) | does nothing | fee contracts inactive / upgrades blocked |
-| upgrades blocked | inactive | emergency upgrades fee contract(s) | authorizes | new fee contracts active / upgrades re-enabled |
+| deployed | inactive | n/a | authorizes contract initialization | *interactManager* enabled / all modules can be activated by operator |
+| active | active | replaces protected module (*mutual upgrade*)| does nothing | no change |
+| active | active | replaces protected module (*mutual upgrade*)| confirms | new module active |
+| active | active | adds authorized extension to protected module (*mutual upgrade*) | does nothing | no change |
+| active | active | adds authorized extension to protected module (*mutual upgrade*) | confirms | extension activated for protected module |
+| active | active | removes extension for protected module (*mutual upgrade*) | does nothing | no change |
+| active | active | removes extension for protected module (*mutual upgrade*) | confirms | extension de-activated for protected module |
+| active | active | calls regular `removeExtension` on extension authorized for protected module | n/a | fails |
+| active | active | calls regular `removeModule` on protected module | n/a | fails |
+| active | active | emergency removes protected module | n/a | protected module de-activated / all upgrades blocked |
+| emergency | inactive | calls `removeExtension` on regular extension | n/a | regular extension removed |
+| emergency | inactive | calls `removeModule` on regular module | n/a | regular module removed |
+| emergency | inactive | adds regular module | n/a | fails |
+| emergency | inactive | adds regular extension | n/a | fails |
+| emergency | inactive | emergency upgrades protected module | does nothing | new protected modules inactive / upgrades blocked |
+| emergency | inactive | emergency upgrades protected module | confirms | new protected module active / upgrades re-enabled |
 
-
-#### Delegation of Authority
-
--------
-
-Another approach is to give the methodologist broad authority to manage which modules are protected and which extensions are allowed to interact with them. In this model, the methodologist would be able to veto any functional changes to the Index they disagree with by:
-
-+ restricting the permissions of modules it has concerns about
-+ requiring that extensions be authorized to access protected modules
-
-To satisfy the engineering requirement that the operator have durable guarantees about which modules and extensions are enabled, the methodologist's ability to restrict extensions would be limited to a defined period of review.
-
-**Risks**
-
-The methodologist may:
-+ try to class all new modules as protected making operation of the index difficult to manage.
-+ abuse their power to protect modules to gain leverage in negotiations with the community
-+ extort concessions from the operator whenever extension upgrades benefit the operator.
-
-For example, suppose the operator shoulders execution costs for some aspect of the system and discovers a way to reduce these by upgrading the manager's module contracts. The methodologist could demand that fees be renegotiated in their favor before enabling the new contracts to capture some of these gains (despite having done nothing to earn them).
-
-These risks could be mitigated by designing a mechanism that lets the community vote to revoke a methodologist's protection of a given module. Ultimately, this option returns the methodologist to square one with respect to whether their fees can be altered without their consent - e.g they can, by popular vote.
-
-**Protected State Conditions**
-
-The table below shows the possible state conditions under this model (without voting).
-
-| Review period | Module State | Operator | Methodologist | Outcome |
-| ---- | ----- | ---- | ---- | ---- |
-| active | n/a | Adds module | protects module | all future extensions must be authorized |
-| active | n/a | Adds module | does nothing | all extensions enabled |
-| active | n/a | Adds module and extension | protects module | current extension disabled until authorized, future extensions must be authorized |
-| active | protected | n/a | un-protects module | all extensions enabled, methodologist may still protect module while review window is open  |
-| elapsed | protected | n/a | un-protects module | all extensions enabled |
-| elapsed | protected | Adds extension | approves extension | extension enabled |
-| elapsed | protected | Adds extension | does nothing | extension disabled |
-| elapsed | unprotected | Adds extension |  n/a | extension enabled |
-
-**Summary**
-+ Modules are unprotected by default
-+ Methodologists can protect a module within a designated review period which begins when the module is added by the operator.
-+ Methodologists must approve extensions for protected modules to enable calls between extension and module.
-+ Methodologists cannot remove authorization from an extension once granted
 
 ## Timeline
 
@@ -175,6 +143,229 @@ The table below shows the possible state conditions under this model (without vo
 **Reviewer**:
 
 ## Proposed Permission and Architecture Changes
+
+### BaseManager Interface Changes
+
+#### Struct
+> ProtectedModule
+
+| Type  | Name  | Description   |
+|------ |------ |-------------  |
+| boolean | isProtected | true if module can only be called by authorized extensions |
+| address[] | authorizedExtensions | array of extensions allowed to call this module |
+
+#### Modifiers
+
+> isInitialized:
+
+```solidity
+/**
+  Modifier requiring that methodologist has authorized the BaseManager's initial protected modules
+  configuration. These are set in the constructor on deployment
+ */
+modifier isInitialized()
+```
+
+> upgradesPermitted
+
+```solidity
+/**
+  Modifier requiring that contract is not in an "emergency state" following a unilateral operator
+  removal of a protected module. In such conditions, the operator cannot add modules or extensions
+  without the consent of the methodologist
+ */
+modifier upgradesPermitted()
+```
+
+#### Public Variables
+
+| Type  | Name  | Description   |
+|------ |------ |-------------  |
+|mapping(address => ProtectedModule) |protectedModules| Defines protected modules. These cannot be called, or removed except by mutual upgrade. Extensions associated with a protected module cannot be unilaterally removed. |
+|address[]| protectedModulesList| A list for iterating over the set of protected modules. This is used to verify that an extension removal by the operator does not require methodologist consent |
+|boolean | initialized|Flag set by methodologist that must be true for BaseManager to begin routing calls via `interactManager`|
+|boolean | upgradesPaused | Flag set to true when the operator "emergency removes" a protected module. |
+
+#### New Methods
+
+> authorizeInitialization:
+
+```solidity
+/*
+  Called by the methodologist to enable contract. All `interactManager` calls revert until this
+  is invoked. Lets methodologist review and authorize initial protected module settings.
+ */
+function authorizeInitialization()
+  external
+  onlyMethodologist
+```
+
+> replaceProtectedModule
+- _oldModule: address of module to replace
+- _newModule: address of module to add in place of
+
+```solidity
+/**
+ **MUTUAL UPGRADE**: Marks a currently protected module as unprotected and deletes its authorized
+ extensions array. Marks a new module as protected and initializes it with an empty
+ `authorizedExtensions` array. Removes `_oldModule` from the `protectedModulesList`
+ */
+function replaceProtectedModule(address _oldModule, address _newModule)
+  external
+  mutualUpgrade(operator, methodologist);
+```
+
+> addAuthorizedExtension
+- _protectedModule: protected module to add extension for
+- _extension: extension which is allowed access to module
+
+```solidity
+/**
+  **MUTUAL UPGRADE**: Authorizes an extension for a protected module
+ */
+function addAuthorizedExtension(address _protectedModule, address _extension)
+  external
+  mutualUpgrade(operator, methodologist);
+```
+
+> removeAuthorizedExtension
+- _protectedModule: protected module to remove extension for
+- _extension: extension whose access to module is revoked
+
+```solidity
+/**
+  **MUTUAL UPGRADE**: De-authorizes an extension for a protected module
+ */
+function removeAuthorizedExtension(address _protectedModule, address _extension)
+  external
+  mutualUpgrade(operator, methodologist);
+```
+
+> emergencyRemoveProtectedModules
+- address _protectedModule: Module to remove protections for
+
+```solidity
+/**
+  **ONLY OPERATOR**:
+  + Marks a currently protected module as unprotected and deletes its authorized extensions array.
+
+  + Removes `protectedModule` from the `protectedModulesList`.
+
+  + Removes module from the SetToken.
+
+  + Sets the `upgradesPaused`flag to true, prohibiting any further operator-only module or extension
+    additions until `emergencyReplaceProtectedModule` is successfully executed.
+ */
+function emergencyRemoveProtectedModule(address _protectedModule)
+  external
+  onlyOperator
+```
+
+> emergencyReplaceProtectedModule
+- _protectedModule: Module to protect
+- _extensions: List of extensions authorized to call the protected module
+
+```solidity
+/**
+  **MUTUAL UPGRADE**: Adds a module (with extensions defined) to replace a protected module
+  unilaterally removed by the operator during an emergency. This method unsets `upgradesPaused` and
+  restores the operators upgradeability privileges
+ */
+function emergencyReplaceProtectedModule(address _protectedModule, address[] _extensions)
+  external
+  mutualUpgrade(operator, methodologist)
+```
+
+#### Updated Functions
+
+> constructor
+- setTokenAddress,
+- operator,
+- methodologist,
+- [ moduleAddress, ... ]
+- [ [extensionAddressForModule, ....], ... ]
+
+```solidity
+/*
+  Protected modules and their extensions are initialized in the constructor
+ */
+constructor(
+  ISetToken _setToken,
+  address _operator,
+  address _methodologist
+  address[] protectedModules,      // List of modules to initialize as protected
+  address[][] authorizedExtensions // Authorized extensions for each protected module
+)
+```
+
+> setManager
+- manager
+
+Change permissions from `onlyOperator` to `mutualUpgrade`, ensuring that methodologist approves
+any new manager.
+
+```solidity
+/**
+  **MUTUAL UPGRADE** Update the SetToken manager address
+ */
+function setManager(address _newManager)
+  external
+  mutualUpgrade(operator, methodologist)
+```
+
+> interactManager
+- module
+- data
+
+Add `isInitialized` modifier, preventing calls until methodologist approves initial BaseManager protected
+module settings
+
+```solidity
+/**
+  **ONLY EXTENSION / ONLY WHEN INITIALIZED**: Routes calls from extensions to modules after verifying that
+  a module can be called by the extension.
+ */
+function interactManager(address _module, bytes calldata _data)
+  external
+  isInitialized
+  onlyAdapter
+```
+
+### FeeSplitAdapter Interface Changes
+
+All fee changing methods are changed from `onlyOperator` to `mutualUpgrade`
+
+| Method | Old | New |
+| ---- | ---- | ---- |
+| *updateStreamingFee* | onlyOperator | mutualUpgrade |
+| *updateIssueFee* | onlyOperator | mutualUpgrade |
+| *updateRedeemFee* | onlyOperator | mutualUpgrade |
+| *updateFeeRecipient* | onlyOperator | mutualUpgrade |
+| *updateFeeSplit* | onlyOperator | mutualUpgrade |
+
+### FeeSplitAdapter Logic Changes
+
+> updateStreamingFee
+
+Ensure that accrueFeesAndDistribute is called during this operation so that the manager contract
+isn't accidentlaly left with a fee balance that could be taken by an unauthorized extension
+
+### StreamingFeeSplitExtension Interface Changes
+
+All fee changing methods are changed from `onlyOperator` to `mutualUpgrade`
+
+| Method | Old | New |
+| ---- | ---- | ---- |
+| *updateStreamingFee* | onlyOperator | mutualUpgrade |
+| *updateFeeRecipient* | onlyOperator | mutualUpgrade |
+| *updateFeeSplit* | onlyOperator | mutualUpgrade |
+
+### StreamingFeeSplitExtension Logic Changes
+
+> updateStreamingFee
+
+Ensure that accrueFeesAndDistribute is called during this operation so that the manager contract
+isn't accidentlaly left with a fee balance that could be taken by an unauthorized extension
 
 
 ## Requirements
