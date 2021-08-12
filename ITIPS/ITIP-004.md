@@ -77,6 +77,7 @@ At the core of this ITIP is a dillema about finding the right balance between pr
 A solution has to take the following operator requirements into consideration:
 1. the operator must be able to add and remove modules and extensions at will to mitigate vulnerabilities and fix bugs
 2. to design system interactions safely, the operator must have durable guarantees about which modules and extensions are enabled
+3. the modularity and upgradeability properties of the new Manager system are preserved
 
 Below we sketch a strategy to balance these requirements and evaluate their risks for both methodologists and operators.
 
@@ -88,7 +89,7 @@ The permissions model proposed for *BaseManager* has the following properties:
 + supports a registry of protected modules and defines which extensions may call them
 + protected modules are initialized on deployment in the manager contract constructor
 + the methodologist must enable the manager contract before it can begin operation
-+ replacement of protected module arrangements can only be performed by mutual upgrade, except under emergency conditions
++ updates to protected module arrangements can only be performed by mutual upgrade, except under emergency conditions
 + protected modules cannot be unilaterally removed, except under emergency circumstances
 + extensions authorized for protected modules cannot be unilaterally removed, except under emergency conditions
 + the operator can protect new modules at their discretion, on behalf of the methodologist
