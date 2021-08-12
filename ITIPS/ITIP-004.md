@@ -185,22 +185,22 @@ Replacement methods call SetToken's `addModule` and/or `removeModule`. Modules t
 
 |  Action | Caller | Initial State | Final State | Success |
 | ----    | -----  | ----          | ----        | ----    |
-| `authorizeExtension` | mutual | regular | authorized | :white_check_mark: |
-| `authorizeExtension` | mutual | authorized | authorized | :x:|
-| `revokeExtensionAuth` | mutual | authorized | regular | :white_check_mark: |
-| `revokeExtensionAuth` | mutual | regular | regular | :x:|
-| `protectModule(..extensions)` | operator | not added | added and authorized | :white_check_mark: |
-| `protectModule(..extensions)` | operator | regular | authorized | :white_check_mark: |
-| `protectModule(..extensions)` | operator | authorized | authorized | :x:|
-| `unProtectModule` | methodologist | authorized | regular | :white_check_mark: |
-| `emergencyRemoveProtected` | operator | authorized | regular | :white_check_mark: |
+| authorizeExtension | mutual | regular | authorized | :white_check_mark: |
+| authorizeExtension | mutual | authorized | authorized | :x:|
+| revokeExtensionAuth | mutual | authorized | regular | :white_check_mark: |
+| revokeExtensionAuth | mutual | regular | regular | :x:|
+| protectModule(..extensions) | operator | not added | added and authorized | :white_check_mark: |
+| protectModule(..extensions) | operator | regular | authorized | :white_check_mark: |
+| protectModule(..extensions) | operator | authorized | authorized | :x:|
+| unProtectModule | methodologist | authorized | regular | :white_check_mark: |
+| emergencyRemoveProtected | operator | authorized | regular | :white_check_mark: |
 
 **...when replacing**
 
 |  Action | Caller | Current Init. | Current Final | Replacement Init. | Replacement Final | Success |
 | ----    | -----  | ----          | ----          | ----              | ----              | ----    |
-| `replaceProtect(..ext)` | mutual | authorized | regular | regular/not-added | authorized | :white_check_mark: |
-| `emergencyReplace(..ext)` | mutual | -| -| regular/not-added | authorized | :white_check_mark: |
+| replaceProtect(..ext) | mutual | authorized | regular | regular/not-added | authorized | :white_check_mark: |
+| emergencyReplace(..ext) | mutual | -| -| regular/not-added | authorized | :white_check_mark: |
 
 ----
 
