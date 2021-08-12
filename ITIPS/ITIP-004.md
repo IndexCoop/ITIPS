@@ -110,28 +110,118 @@ To resolve the freeze, the methodologist would need to approve an emergency repl
 
 In sum, the operator's power to execute an emergency removal is counterbalanced by the methodologist's power to prevent normal upgrades until they authorize a new protected module arrangement.
 
-**State Transition Table: Overview**
+**State Transition Tables**
 
-| Stage | Protected Module | Operator Action | Methodologist Action | Outcome |
-| ----  | ----- | ---- | ---- | ---- |
-| deployment | inactive | deploys, registers permissioned modules and their authorized extensions | n/a | *interactManager* frozen, regular modules and extensions can be added |
-| deployed | inactive | n/a | does nothing | *interactManager* frozen |
-| deployed | inactive | n/a | authorizes contract initialization | *interactManager* enabled / all modules can be activated by operator |
-| active | active | replaces protected module (*mutual upgrade*)| does nothing | no change |
-| active | active | replaces protected module (*mutual upgrade*)| confirms | new module active |
-| active | active | adds authorized extension to protected module (*mutual upgrade*) | does nothing | no change |
-| active | active | adds authorized extension to protected module (*mutual upgrade*) | confirms | extension activated for protected module |
-| active | active | removes extension for protected module (*mutual upgrade*) | does nothing | no change |
-| active | active | removes extension for protected module (*mutual upgrade*) | confirms | extension de-activated for protected module |
-| active | active | calls regular `removeExtension` on extension authorized for protected module | n/a | fails |
-| active | active | calls regular `removeModule` on protected module | n/a | fails |
-| active | active | emergency removes protected module | n/a | protected module de-activated / all upgrades blocked |
-| emergency | inactive | calls `removeExtension` on regular extension | n/a | regular extension removed |
-| emergency | inactive | calls `removeModule` on regular module | n/a | regular module removed |
-| emergency | inactive | adds regular module | n/a | fails |
-| emergency | inactive | adds regular extension | n/a | fails |
-| emergency | inactive | emergency upgrades protected module | does nothing | new protected modules inactive / upgrades blocked |
-| emergency | inactive | emergency upgrades protected module | confirms | new protected module active / upgrades re-enabled |
+> **Deployment and initialization**
+
+`interactManager` is locked until the methodologist authorizes initialization. Anything
+else can be called normally.
+
+| initialized | Action | Target | Caller | Success |
+| ----        | -----  | ----   | ----   | ----    |
+| false | constructor(...empty) | -| deployer | :white_check_mark: |
+| false | constructor(...protections) | -| deployer | :white_check_mark: |
+| false | interactManager | regular module | operator/extension | :x: |
+| false | interactManager | protected module | operator/extension | :x: |
+| false | authorizeInitialization | -| operator | :x: |
+| false | authorizeInitialization | -| methodologist | :white_check_mark: |
+| true  | interactManager | regular module | operator/extension | :white_check_mark: |
+| true  | interactManager | protected module | operator/extension | if authorized |
+
+-----
+
+> **Standard module and extension protections**
+
+|  Action | Target | Caller | Success |
+| ----    | -----  | ----   | ----    |
+| interactManager | regular module | operator/extension | :white_check_mark: |
+| interactManager | protected module | operator/extension | if authorized |
+| removeModule | regular module  | operator | :white_check_mark: |
+| removeModule | protected module  | operator | :x: |
+| removeExtension | regular extension  | operator | :white_check_mark: |
+| removeExtension | extension when authorized for any module  | operator | :x: |
+
+-----
+
+> **Protected module status state transitions**
+
++ "regular" means a module has been added to the manager but isn't protected
++ "not added" means the module has not been added to the manager yet
+
+|  Action | Caller | Initial State | Final State | Success |
+| ----    | -----  | ----          | ----        | ----    |
+| constructor | operator | -| added and protected | :white_check_mark: |
+| protectModule | operator | regular | protected | :white_check_mark: |
+| protectModule | operator | not added | not added | :x:|
+| protectModule | operator | protected | protected | :x:|
+| unProtectModule | methodologist | protected | regular | :white_check_mark: |
+| unProtectModule | methodologist | not added | not added | :x:|
+| unProtectModule | methodologist | regular | regular | :x:|
+| emergencyRemoveProtected | operator | protected | not added | :white_check_mark: |
+| emergencyRemoveProtected | operator | not added | not added | :x:|
+| emergencyRemoveProtected | operator | regular | regular | :x:|
+
+**...when replacing**:
+
+Replacement methods call SetToken's `addModule` and/or `removeModule`. Modules to replace with should
+*not* be added to the manager before calling these methods.
+
+|  Action | Caller | Current Init | Current Final | Replacement Init | Replacement Final | Success |
+| ----    | -----  | ----         | ----          | ----             | ----              | ----    |
+| replaceProtected | mutual | protected | not-added | not added | protected | :white_check_mark: |
+| replaceProtected | mutual | regular | regular | -| -| :x:|
+| replaceProtected | mutual | not added | not added | -| -| :x:|
+| emergencyReplaceProtected | mutual | -| -| not added | protected | :white_check_mark: |
+| emergencyReplaceProtected | mutual | -| -| protected | protected | :x:|
+| emergencyReplaceProtected | mutual | -| -| regular | regular | :x:|
+
+-----
+
+> **Authorized extension status state transitions**
+
++ "regular" means an extension has been added to the manager but isn't authorized for any module
++ "not added" means the extension has not been added to the manager yet
++ authorization is granted for a specific module. Extensions can be authorized for more than one.
+
+|  Action | Caller | Initial State | Final State | Success |
+| ----    | -----  | ----          | ----        | ----    |
+| `authorizeExtension` | mutual | regular | authorized | :white_check_mark: |
+| `authorizeExtension` | mutual | authorized | authorized | :x:|
+| `revokeExtensionAuth` | mutual | authorized | regular | :white_check_mark: |
+| `revokeExtensionAuth` | mutual | regular | regular | :x:|
+| `protectModule(..extensions)` | operator | not added | added and authorized | :white_check_mark: |
+| `protectModule(..extensions)` | operator | regular | authorized | :white_check_mark: |
+| `protectModule(..extensions)` | operator | authorized | authorized | :x:|
+| `unProtectModule` | methodologist | authorized | regular | :white_check_mark: |
+| `emergencyRemoveProtected` | operator | authorized | regular | :white_check_mark: |
+
+**...when replacing**
+
+|  Action | Caller | Current Init. | Current Final | Replacement Init. | Replacement Final | Success |
+| ----    | -----  | ----          | ----          | ----              | ----              | ----    |
+| `replaceProtect(..ext)` | mutual | authorized | regular | regular/not-added | authorized | :white_check_mark: |
+| `emergencyReplace(..ext)` | mutual | -| -| regular/not-added | authorized | :white_check_mark: |
+
+----
+
+> **Emergencies: state transitions**
+
++ Because the operator can emergency remove more than one module, emergencies are tracked with
+a counter
+
+|Init Emerg # |  Action | Caller | Initial Mod | Final Mod | Final Emerg # | Success |
+| --------    | ----    | -----  | ----        | ----      | ----          | ----    |
+| 0          | emergencyRemoveProtected | operator | protected | not added | 1 | :white_check_mark: |
+| 1          | emergencyRemoveProtected | operator | protected | not added | 2 | :white_check_mark: |
+| 1          | emergencyReplaceProtected | mutual | - | protected | 0 | :white_check_mark: |
+| 2          | emergencyReplaceProtected | mutual | - | protected | 1 | :white_check_mark: |
+| 0          | emergencyReplaceProtected | mutual | - | - | 0 | :x:|
+| 1          | resolveEmergency | methodologist | - | - | 0 | :white_check_mark: |
+| 2          | resolveEmergency | methodologist | - | - | 1 | :white_check_mark: |
+| 0          | resolveEmergency | methodologist | - | - | 0 | :x: |
+| 1          | addModule | operator | not added | not added | 1 | :x:|
+| 1          | addExtension | operator | not added | not added | 1 | :x:|
+| 1          | protectModule| operator | regular | regular | 1 | :x:|
 
 
 ## Timeline
