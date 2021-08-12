@@ -68,7 +68,7 @@ Restoring the `mutualUpgrade` modifier to the relevant fee methods to FeeSplitEx
 
 ### Fee Security
 
-At the moment, the `BaseManager` is the receipient of fees prior to distribution and fee accrual can be initiated by anyone as an atomic step (via the `StreamingFee` module). This arrangement exposes the fees to extensions that might not conform to Index Community fee requirements. We should update `FeeExtension` contracts so fees accrue to directly to themselves - by definition they'll be appropriately permissioned.
+At the moment, the `BaseManager` is the receipient of fees prior to distribution and fee accrual occurs in the StreamingFeeModule without immediate distribution when the streaming fee is updates. This arrangement exposes the fees to extensions that might not conform to Index Community fee requirements. We should update `FeeExtension` contracts so fees are always distributed when accrued.
 
 ### Module and Extension Updates
 
