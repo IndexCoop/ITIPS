@@ -184,17 +184,19 @@ Replacement methods call SetToken's `addModule` and/or `removeModule`. Modules t
 + "not added" means the extension has not been added to the manager yet
 + authorization is granted for a specific module. Extensions can be authorized for more than one.
 
-|  Action | Caller | Initial State | Final State | Success |
-| ----    | -----  | ----          | ----        | ----    |
-| authorizeExtension | mutual | regular | authorized | :white_check_mark: |
-| authorizeExtension | mutual | authorized | authorized | :x:|
-| revokeExtensionAuth | mutual | authorized | regular | :white_check_mark: |
-| revokeExtensionAuth | mutual | regular | regular | :x:|
-| protectModule(..extensions) | operator | not added | added and authorized | :white_check_mark: |
-| protectModule(..extensions) | operator | regular | authorized | :white_check_mark: |
-| protectModule(..extensions) | operator | authorized | authorized | :x:|
-| unProtectModule | methodologist | authorized | regular | :white_check_mark: |
-| emergencyRemoveProtected | operator | authorized | regular | :white_check_mark: |
+|  Action | Caller | Module State | Initial Ext. State | Final Ext. State | Success |
+| ----    | -----  | ----         | ----               | ----             | ----    |
+| authorizeExtension | mutual | protected |regular | authorized | :white_check_mark: |
+| authorizeExtension | mutual | protected |authorized | authorized | :x:|
+| authorizeExtension | mutual | regular   | regular | regular | :x: |
+| revokeExtensionAuth | mutual | protected |authorized | regular | :white_check_mark: |
+| revokeExtensionAuth | mutual | protected | regular | regular | :x:|
+| revokeExtensionAuth | mutual | regular | regular | regular | :x:|
+| protectModule(..extensions) | - |operator | not added | added and authorized | :white_check_mark: |
+| protectModule(..extensions) | - |operator | regular | authorized | :white_check_mark: |
+| protectModule(..extensions) | - |operator | authorized | authorized | :x:|
+| unProtectModule | methodologist | - | authorized | regular | :white_check_mark: |
+| emergencyRemoveProtected | operator | - | authorized | regular | :white_check_mark: |
 
 **...when replacing**
 
