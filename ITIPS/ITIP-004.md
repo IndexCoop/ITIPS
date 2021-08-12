@@ -188,9 +188,11 @@ Replacement methods call SetToken's `addModule` and/or `removeModule`. Modules t
 | ----    | -----  | ----         | ----               | ----             | ----    |
 | authorizeExtension | mutual | protected |regular | authorized | :white_check_mark: |
 | authorizeExtension | mutual | protected |authorized | authorized | :x:|
+| authorizeExtension | mutual | protected |not added | not added | :x:|
 | authorizeExtension | mutual | regular   | regular | regular | :x: |
 | revokeExtensionAuth | mutual | protected |authorized | regular | :white_check_mark: |
 | revokeExtensionAuth | mutual | protected | regular | regular | :x:|
+| revokeExtensionAuth | mutual | protected | not added | not added | :x:|
 | revokeExtensionAuth | mutual | regular | regular | regular | :x:|
 | protectModule(..extensions) | - |operator | not added | added and authorized | :white_check_mark: |
 | protectModule(..extensions) | - |operator | regular | authorized | :white_check_mark: |
