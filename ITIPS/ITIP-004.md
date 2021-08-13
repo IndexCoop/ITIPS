@@ -227,6 +227,8 @@ a counter
 | 1          | addModule | operator | not added | not added | 1 | :x:|
 | 1          | addExtension | operator | not added | not added | 1 | :x:|
 | 1          | protectModule| operator | regular | regular | 1 | :x:|
+| 1          | replaceProtectedModule| mutual | protected | protected | 1 | :white_check_mark: |
+| 1          | replaceProtectedModule| mutual | not added | not added | 1 | :x:|
 
 
 ## Timeline
@@ -265,6 +267,17 @@ a counter
   without the consent of the methodologist
  */
 modifier upgradesPermitted()
+```
+
+> onlyEmergency
+
+```solidity
+/**
+  Modifier requiring that contract is in an "emergency state" following a unilateral operator
+  removal of a protected module. Emergency replacement and resolution can only happen during
+  an emergency.
+ */
+modifier onlyEmergency()
 ```
 
 #### Public Variables
@@ -340,7 +353,7 @@ function protectModule(address _module, address[] memory _adapters)
 > unProtectModule
 - _module: Module to remove protections for
 
-```soldiity
+```solidity
 /**
  * METHODOLOGIST ONLY: Called by the methodologist when they want to cede control over a
  * protected module without triggering an emergency (for example, to remove it because its dead).
