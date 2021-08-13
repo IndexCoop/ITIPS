@@ -170,6 +170,7 @@ Replacement methods call SetToken's `addModule` and/or `removeModule`. Modules t
 |  Action | Caller | Current Init | Current Final | Replacement Init | Replacement Final | Success |
 | ----    | -----  | ----         | ----          | ----             | ----              | ----    |
 | replaceProtected | mutual | protected | not-added | not added | protected | :white_check_mark: |
+| replaceProtected | mutual | protected | protected | regular | regular | :x: |
 | replaceProtected | mutual | regular | regular | -| -| :x:|
 | replaceProtected | mutual | not added | not added | -| -| :x:|
 | emergencyReplaceProtected | mutual | -| -| not added | protected | :white_check_mark: |
