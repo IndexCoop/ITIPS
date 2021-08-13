@@ -459,6 +459,35 @@ function setManager(address _newManager)
   mutualUpgrade(operator, methodologist)
 ```
 
+#### New Getters
+
+> getAuthorizedExtensions
+- _module: protected module
+
+Returns a list of all extensions authorized for module
+
+```solidity
+function getAuthorizedExtensions(address _module) external view returns (address[] memory)
+```
+
+> isAuthorizedExtension
+- _module: protected module
+- _extension: authorized extension
+
+Returns true if extension is authorized for a module
+
+```solidity
+function isAuthorizedExtension(address _module, address _extension) external view returns (bool)
+```
+
+> getProtectedModules
+
+Returns a list of all protected modules for the manager
+
+```solidity
+function getProtectedModules() external view returns (address[] memory)
+```
+
 #### Logic changes in existing functions
 
 > interactManager
