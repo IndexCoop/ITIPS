@@ -390,7 +390,8 @@ function emergencyRemoveProtectedModule(address _module)
 
 ```solidity
 /**
- * MUTUAL UPGRADE: Replaces a module the operator has removed with `emergencyRemoveProtectedModule`.
+ * MUTUAL UPGRADE & EMERGENCY ONLY: Replaces a module the operator has removed with
+ * `emergencyRemoveProtectedModule`.
  *
  * Adds new module to SetToken. Marks `_newModule` as protected and addes/authorizes new adapters for it.
  * Adds `_newModule` to protectedModules list. Decrements the emergencies counter, restoring
@@ -398,6 +399,7 @@ function emergencyRemoveProtectedModule(address _module)
  */
 function emergencyReplaceProtectedModule(address _module, address[] _extensions)
   external
+  onlyEmergency
   mutualUpgrade(operator, methodologist)
 ```
 
@@ -425,15 +427,15 @@ function replaceProtectedModule(address _oldModule, address _newModule, address[
 
 ```solidity
 /**
- * METHODOLOGIST ONLY: Allows a methodologist to exit a state of emergency without replacing a
- * protected module that was unilaterally removed. This could happen if the module has no viable
- * substitute or operator and methodologist agree that restoring normal operations is the
+ * METHODOLOGIST ONLY & EMERGENCY ONLY: Allows a methodologist to exit a state of emergency without
+ * replacing a protected module that was unilaterally removed. This could happen if the module has
+ * no viable substitute or operator and methodologist agree that restoring normal operations is the
  * best way forward.
  */
-function resolveEmergency() external onlyMethodologist {
-    require(emergencies > 0, "Not in emergency");
-    emergencies -= 1;
-}
+function resolveEmergency()
+  external
+  onlyEmergency
+  onlyMethodologist
 ```
 
 #### Interfaces changes for existing functions
