@@ -41,7 +41,7 @@ Handling Curve
     - No exact output zap in
     - No exact output zap out
 - Can also just rebalance into any token in the curve pool
-    - after rebalance use AMMModule module to enter curve LP
+    - after rebalance use `AmmModule` module to enter curve LP
     - then use wrap module to enter yearn vault
 
 
@@ -67,29 +67,64 @@ Before we spec out the contract(s) in depth we want to make sure that we are ali
 
 **Reviewer**:
 
-Reviewer: []
 ## Specification
-### [Contract Name]
-#### Inheritance
-- List inherited contracts
-#### Structs
-| Type 	| Name 	| Description 	|
-|------	|------	|-------------	|
-|address|manager|Address of the manager|
-|uint256|iterations|Number of times manager has called contract|  
-#### Constants
-| Type 	| Name 	| Description 	| Value 	|
-|------	|------	|-------------	|-------	|
-|uint256|ONE    | The number one| 1       	|
-#### Public Variables
-| Type 	| Name 	| Description 	|
-|------	|------	|-------------	|
-|uint256|hodlers|Number of holders of this token|
-#### Modifiers
-> onlyManager(SetToken _setToken)
+### AirdropModule
 #### Functions
-> issue(SetToken _setToken, uint256 quantity) external
-- Pseudo code
+> initialize(ISetToken _setToken, AirdropSettings memory _airdropSettings, bool _syncOnIssueRedeem) external
+```solidity
+function initialize(
+    ISetToken _setToken,
+    AirdropSettings memory _airdropSettings,
+    bool _syncOnIssueRedeem,
+    IDebtIssuanceModule _debtIssuanceModule
+)
+    external
+    onlySetManager(_setToken, msg.sender)
+    onlyValidAndPendingSet(_setToken) 
+{
+    require(_airdropSettings.airdrops.length > 0, "At least one token must be passed.");
+    require(_airdropSettings.airdropFee <= PreciseUnitMath.preciseUnit(), "Fee must be <= 100%.");
+
+    // register with all modules so that this can remain compatible with future modules that need syncing
+    address[] memory modules = _setToken.getModules();
+    for(uint256 i = 0; i < modules.length; i++) {
+        try IDebtIssuanceModule(modules[i]).registerToIssuanceModule(_setToken) {} catch {}
+    }
+
+    airdropSettings[_setToken] = _airdropSettings;
+
+    _setToken.initializeModule();
+}
+```
+
+> moduleIssueHook(ISetToken _setToken, uint256 /* _quantity */) external
+```solidity
+function moduleIssueHook(ISetToken _setToken, uint256 /* _quantity */) external onlyModule(_setToken) {
+    _sync(_setToken);
+}
+```
+
+> moduleRedeemHook(ISetToken _setToken, uint256 /* _quantity */) external
+```solidity
+function moduleRedeemHook(ISetToken _setToken, uint256 /* _quantity */) external onlyModule(_setToken) {
+    _sync(_setToken);
+}
+```
+
+> _sync(ISetToken _setToken) internal
+```solidity
+function _sync(ISetToken _setToken) internal {
+    address[] memory airdrops = _airdrops(_setToken);
+    address[] memory components = _setToken.getComponents();
+    for (uint256 i = 0; i < airdrops.length; i++) {
+        if (components.contains(airdrops[i])) {     // might be able to optimize this check to keep the runtime linear
+            _absorb(_setToken, airdrops[i]);
+        }
+    }
+}
+```
+
+
 ## Checkpoint 3
 Before we move onto the implementation phase we want to make sure that we are aligned on the spec. All contracts should be specced out, their state and external function signatures should be defined. For more complex contracts, internal function definition is preferred in order to align on proper abstractions. Reviewer should take care to make sure that all stake holders (product, app engineering) have their needs met in this stage.
 
