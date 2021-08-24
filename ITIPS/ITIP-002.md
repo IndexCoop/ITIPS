@@ -20,20 +20,28 @@ The wrap module does not allow slippage checks. This can potentially cause probl
 - When do we need to sync positions?
     - At minimum before issuance, redemption, and after claiming COMP and AAVE rewards
     - Do we also need to sync positions before each use of the TradeModule or WrapModule?
+    - How can we prevent users from arbing our calls to claim tokens such as AAVE and COMP?
+- Do we expect negative rebases on the tokens? `AirdropModule` will fail if the token negatively rebases.
+
 ## Feasibility Analysis
 Add a IntrinsicProductivityExtension for managing the wrapping, unwrapping, and claiming processes
 - Support interacting with the wrap module
 - Support interacting with the ClaimModule and AirdropModule for claiming AAVE and COMP rewards
 
-Add a SyncPositionsHook for syncing positions
-- Used before issuance, redemption, and after claiming AAVE and COMP tokens
+Syncing positions before issuance and redemption
+- Add new `AirdropModule` pre and post issuance hooks to `DebtIssuanceModule` for syncing positions
+    - Used before issuance, redemption, and after claiming AAVE and COMP tokens
+- Could build a custom `SyncModule` which does a similar thing
+    - This might have some benefits since we wouldn't need to worry about compatibility between `DebtIssuanceModule` and `AirdropModule`
+- Could also just write a RebaseTokenIssuanceModule which syncs positions before issuance and redemption
+    - Probably overkill and not very modular
 
 Handling Curve
 - Can use Zapper to zap into and out of yearn vaults (including curve yearn vaults) to/from WETH
     - No exact output zap in
     - No exact output zap out
-- Can also just rebalance into the non-3Pool token in the curve pool
-    - after rebalance use wrap/trade module to enter curve LP
+- Can also just rebalance into any token in the curve pool
+    - after rebalance use AMMModule module to enter curve LP
     - then use wrap module to enter yearn vault
 
 
@@ -44,16 +52,16 @@ internal audit: 8/23
 external audit: 8/30
 
 ## Checkpoint 1
-Before more in depth design of the contract flows lets make sure that all the work done to this point has been exhaustive. It should be clear what we're doing, why, and for who. All necessary information on external protocols should be gathered and potential solutions considered. At this point we should be in alignment with product on the non-technical requirements for this feature. It is up to the reviewer to determine whether we move onto the next step.
-
 **Reviewer**:
 
 ## Proposed Architecture Changes
-A diagram would be helpful here to see where new feature slot into the system. Additionally a brief description of any new contracts is helpful.
+To launch products with intrinsic productivity, we will focus on only handling issuance and redemption to start. It will likely be at least a month (if not longer) after launching until we need to handle rebalances. Handling rebalances only requires upgrading the `AirdropModule` to be act as a module issuance/redemption hook. First, on initialization of the `AirdropModule` it must be able to optionally register with the `DebtIssuanceModule` by calling `registerToIssuanceModule`. Additionally we must add a `moduleIssueHook` and `moduleRedeemHook` to `AirdropModule` which syncs all the the rebasing tokens.
+
 ## Requirements
-These should be a distillation of the previous two sections taking into account the decided upon high-level implementation. Each flow should have high level requirements taking into account the needs of participants in the flow (users, managers, market makers, app devs, etc) 
-## User Flows
-- Highlight *each* external flow enabled by this feature. It's helpful to use diagrams (add them to the `assets` folder). Examples can be very helpful, make sure to highlight *who* is initiating this flow, *when* and *why*. A reviewer should be able to pick out what requirements are being covered by this flow.
+- Only require changes to `AirdropModule`
+- Issuance hooks should only sync positions for components that are both allowed airdrops and already components of the set
+- When initializing the `AirdropModule` it should allow users to disable registering itself as a hook to the `DebtIssuanceModule`
+
 ## Checkpoint 2
 Before we spec out the contract(s) in depth we want to make sure that we are aligned on all the technical requirements and flows for contract interaction. Again the who, what, when, why should be clearly illuminated for each flow. It is up to the reviewer to determine whether we move onto the next step.
 
