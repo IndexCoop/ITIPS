@@ -39,19 +39,16 @@ Under normal operation (not during rebalances), the only type of wrapped positio
 9/2: deployment scripts
 
 ## Checkpoint 1
-Before more in depth design of the contract flows lets make sure that all the work done to this point has been exhaustive. It should be clear what we're doing, why, and for who. All necessary information on external protocols should be gathered and potential solutions considered. At this point we should be in alignment with product on the non-technical requirements for this feature. It is up to the reviewer to determine whether we move onto the next step.
-
 **Reviewer**:
 
 ## Proposed Architecture Changes
-A diagram would be helpful here to see where new feature slot into the system. Additionally a brief description of any new contracts is helpful.
-## Requirements
-These should be a distillation of the previous two sections taking into account the decided upon high-level implementation. Each flow should have high level requirements taking into account the needs of participants in the flow (users, managers, market makers, app devs, etc) 
-## User Flows
-- Highlight *each* external flow enabled by this feature. It's helpful to use diagrams (add them to the `assets` folder). Examples can be very helpful, make sure to highlight *who* is initiating this flow, *when* and *why*. A reviewer should be able to pick out what requirements are being covered by this flow.
-## Checkpoint 2
-Before we spec out the contract(s) in depth we want to make sure that we are aligned on all the technical requirements and flows for contract interaction. Again the who, what, when, why should be clearly illuminated for each flow. It is up to the reviewer to determine whether we move onto the next step.
+Add a new manager issuance hook called `SyncIssuanceHook` which has a `invokePreIssueHook` function that uses the `AirdropModule` to sync all rebasing components.
 
+## Requirements
+- Requires no changes to core set protocol contracts
+- Issuance hooks should only sync positions for components that are both allowed airdrops and already components of the set
+
+## Checkpoint 2
 **Reviewer**:
 
 Reviewer: []
