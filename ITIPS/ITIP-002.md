@@ -100,65 +100,65 @@ function constructor(IBaseManager _manager, IAirdropModule _airdropModule) publi
 }
 ```
 
-> initializeAirdropModule(AirdropSettings memory _airdropSettings) external
+> initializeAirdropModule(AirdropSettings memory _airdropSettings) external onlyOperator
 ```solidity
-function initializeAirdropModule(AirdropSettings memory _airdropSettings) external {
+function initializeAirdropModule(AirdropSettings memory _airdropSettings) external onlyOperator {
     ISetToken setToken = manager.setToken();
     airdropModule.initialize(setToken, _airdropSettings);
 }
 ```
 
-> absorb(address _token) external
+> absorb(address _token) external onlyOperator
 ```solidity
-function absorb(address _token) external {
+function absorb(address _token) external onlyOperator {
     ISetToken setToken = manager.setToken();
     airdropModule.absorb(setToken, _token);
 }
 ```
 
-> batchAbsorb(address memory _tokens) external
+> batchAbsorb(address memory _tokens) external onlyOperator
 ```solidity
-function batchAbsorb(address memory _tokens) external {
+function batchAbsorb(address memory _tokens) external onlyOperator {
     ISetToken setToken = manager.setToken();
     airdropModule.batchAbsorb(setToken, _tokens);
 }
 ```
 
-> addAirdrop(address _token) external
+> addAirdrop(address _token) external onlyOperator
 ```solidity
-function addAirdrop(address _token) external {
+function addAirdrop(address _token) external onlyOperator {
     ISetToken setToken = manager.setToken();
     airdropModule.addAirdrop(setToken, _token);
 }
 ```
 
-> removeAirdrop(address _token) external
+> removeAirdrop(address _token) external onlyOperator
 ```solidity
-function removeAirdrop(address _token) external {
+function removeAirdrop(address _token) external onlyOperator {
     ISetToken setToken = manager.setToken();
     airdropModule.removeAirdrop(setToken, _token);
 }
 ```
 
-> updateAnyoneAbsorb(bool _anyoneAbsorb) external
+> updateAnyoneAbsorb(bool _anyoneAbsorb) external onlyOperator
 ```solidity
-function updateAnyoneAbsorb(bool _anyoneAbsorb) external {
+function updateAnyoneAbsorb(bool _anyoneAbsorb) external onlyOperator {
     ISetToken setToken = manager.setToken();
     airdropModule.updateAnyoneAbsorb(setToken, _anyoneAbsorb);
 }
 ```
 
-> updateFeeRecipient(address _newRecipient) external
+> updateFeeRecipient(address _newRecipient) external onlyOperator
 ```solidity
-function updateFeeRecipient(address _newRecipient) external {
+function updateFeeRecipient(address _newRecipient) external onlyOperator {
     ISetToken setToken = manager.setToken();
     airdropModule.updateFeeRecipient(setToken, _newRecipient);
 }
 ```
 
-> updateAirdropFee(uint256 _newFee) external
+> updateAirdropFee(uint256 _newFee) external onlyOperator
 ```solidity
-function updateAirdropFee(uint256 _newFee) external {
+function updateAirdropFee(uint256 _newFee) external onlyOperator {
     ISetToken setToken = manager.setToken();
     airdropModule.updateAirdropFee(setToken, _newFee);
 }
