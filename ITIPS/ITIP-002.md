@@ -47,33 +47,52 @@ Add a new manager issuance hook called `SyncIssuanceHook` which has a `invokePre
 ## Requirements
 - Requires no changes to core set protocol contracts
 - Issuance hooks should only sync positions for components that are both allowed airdrops and already components of the set
+- Anyone can call the hooks to sync positions
+- Has hooks for both issuance and redemption
+    - Redemption hook not needed right now but future issuance modules may support it
 
 ## Checkpoint 2
 **Reviewer**:
 
-Reviewer: []
 ## Specification
-### [Contract Name]
+### SyncIssuanceHook
 #### Inheritance
-- List inherited contracts
-#### Structs
-| Type 	| Name 	| Description 	|
-|------	|------	|-------------	|
-|address|manager|Address of the manager|
-|uint256|iterations|Number of times manager has called contract|  
-#### Constants
-| Type 	| Name 	| Description 	| Value 	|
-|------	|------	|-------------	|-------	|
-|uint256|ONE    | The number one| 1       	|
-#### Public Variables
-| Type 	| Name 	| Description 	|
-|------	|------	|-------------	|
-|uint256|hodlers|Number of holders of this token|
-#### Modifiers
-> onlyManager(SetToken _setToken)
+- IManagerIssuanceHook
 #### Functions
-> issue(SetToken _setToken, uint256 quantity) external
-- Pseudo code
+> constructor(IAirdropModule _airdropModule) public
+```solidity
+function constructor(IAirdropModule _airdropModule) public {
+    airdropModule = _airdropModule;
+}
+```
+
+> invokePreIssueHook(SetToken _setToken, uint256 _quantity, address _sender, address _to) external
+```solidity
+function invokePreIssueHook(SetToken _setToken, uint256 _quantity, address _sender, address _to) external override {
+    _sync(_setToken);
+}
+```
+
+> invokePreIssueRedeem(SetToken _setToken, uint256 _quantity, address _sender, address _to) external
+```solidity
+function invokePreIssueHook(SetToken _setToken, uint256 _quantity, address _sender, address _to) external override {
+    _sync(_setToken);
+}
+```
+
+> _sync(ISetToken _setToken) internal
+```solidity
+function _sync(ISetToken _setToken) internal {
+    address[] memory airdrops = airdropModule.getAirdrops(_setToken);
+    address[] memory components = _setToken.getComponents();
+    for (uint256 i = 0; i < airdrops.length; i++) {
+        if (components.contains(airdrops[i])) {
+            _absorb(_setToken, airdrops[i]);
+        }
+    }
+}
+```
+
 ## Checkpoint 3
 Before we move onto the implementation phase we want to make sure that we are aligned on the spec. All contracts should be specced out, their state and external function signatures should be defined. For more complex contracts, internal function definition is preferred in order to align on proper abstractions. Reviewer should take care to make sure that all stake holders (product, app engineering) have their needs met in this stage.
 
