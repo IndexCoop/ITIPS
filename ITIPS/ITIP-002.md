@@ -42,7 +42,7 @@ Under normal operation (not during rebalances), the only type of wrapped positio
 **Reviewer**:
 
 ## Proposed Architecture Changes
-Add a new manager issuance hook called `SyncIssuanceHook` which has a `invokePreIssueHook` function that uses the `AirdropModule` to sync all rebasing components.
+Add a new manager issuance hook called `SyncIssuanceHook` which has a `invokePreIssueHook` function that uses the `AirdropModule` to sync all rebasing components. In order to add and remove new rebasing tokens, we need to add a new extension, `AirdropExtension` for interacting with the `AirdropModule`.
 
 ## Requirements
 - Requires no changes to core set protocol contracts
@@ -50,6 +50,8 @@ Add a new manager issuance hook called `SyncIssuanceHook` which has a `invokePre
 - Anyone can call the hooks to sync positions
 - Has hooks for both issuance and redemption
     - Redemption hook not needed right now but future issuance modules may support it
+- `AirdropExtension` allows adding and removing airdrop tokens
+    - For completeness, add all manager function of `AirdropModule` to this
 
 ## Checkpoint 2
 **Reviewer**:
@@ -84,7 +86,81 @@ function invokePreIssueHook(SetToken _setToken, uint256 _quantity, address _send
 ```solidity
 function _sync(ISetToken _setToken) internal {
     address[] memory airdrops = airdropModule.getAirdrops(_setToken);
-    airdropModule.batchAbsorb(airdrops);
+    airdropModule.batchAbsorb(_setToken, airdrops);
+}
+```
+
+### AirdropExtension
+#### Functions
+> constructor(IBaseManager _manager, IAirdropModule _airdropModule) public
+```solidity
+function constructor(IBaseManager _manager, IAirdropModule _airdropModule) public {
+    manager = _manager;
+    airdropModule = _airdropModule;
+}
+```
+
+> initializeAirdropModule(AirdropSettings memory _airdropSettings) external
+```solidity
+function initializeAirdropModule(AirdropSettings memory _airdropSettings) external {
+    ISetToken setToken = manager.setToken();
+    airdropModule.initialize(setToken, _airdropSettings);
+}
+```
+
+> absorb(address _token) external
+```solidity
+function absorb(address _token) external {
+    ISetToken setToken = manager.setToken();
+    airdropModule.absorb(setToken, _token);
+}
+```
+
+> batchAbsorb(address memory _tokens) external
+```solidity
+function batchAbsorb(address memory _tokens) external {
+    ISetToken setToken = manager.setToken();
+    airdropModule.batchAbsorb(setToken, _tokens);
+}
+```
+
+> addAirdrop(address _token) external
+```solidity
+function addAirdrop(address _token) external {
+    ISetToken setToken = manager.setToken();
+    airdropModule.addAirdrop(setToken, _token);
+}
+```
+
+> removeAirdrop(address _token) external
+```solidity
+function removeAirdrop(address _token) external {
+    ISetToken setToken = manager.setToken();
+    airdropModule.removeAirdrop(setToken, _token);
+}
+```
+
+> updateAnyoneAbsorb(bool _anyoneAbsorb) external
+```solidity
+function updateAnyoneAbsorb(bool _anyoneAbsorb) external {
+    ISetToken setToken = manager.setToken();
+    airdropModule.updateAnyoneAbsorb(setToken, _anyoneAbsorb);
+}
+```
+
+> updateFeeRecipient(address _newRecipient) external
+```solidity
+function updateFeeRecipient(address _newRecipient) external {
+    ISetToken setToken = manager.setToken();
+    airdropModule.updateFeeRecipient(setToken, _newRecipient);
+}
+```
+
+> updateAirdropFee(uint256 _newFee) external
+```solidity
+function updateAirdropFee(uint256 _newFee) external {
+    ISetToken setToken = manager.setToken();
+    airdropModule.updateAirdropFee(setToken, _newFee);
 }
 ```
 
