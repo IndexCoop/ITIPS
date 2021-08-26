@@ -42,7 +42,7 @@ Under normal operation (not during rebalances), the only type of wrapped positio
 **Reviewer**:
 
 ## Proposed Architecture Changes
-Add a new manager issuance hook called `SyncIssuanceHook` which has a `invokePreIssueHook` function that uses the `AirdropModule` to sync all rebasing components. In order to add and remove new rebasing tokens, we need to add a new extension, `AirdropExtension` for interacting with the `AirdropModule`.
+Add a new manager issuance hook called `AirdropIssuanceHook` which has a `invokePreIssueHook` function that uses the `AirdropModule` to sync all rebasing components. In order to add and remove new rebasing tokens, we need to add a new extension, `AirdropExtension` for interacting with the `AirdropModule`.
 
 ## Requirements
 - Requires no changes to core set protocol contracts
@@ -57,7 +57,7 @@ Add a new manager issuance hook called `SyncIssuanceHook` which has a `invokePre
 **Reviewer**:
 
 ## Specification
-### SyncIssuanceHook
+### AirdropIssuanceHook
 #### Inheritance
 - IManagerIssuanceHook
 #### Functions
