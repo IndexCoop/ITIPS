@@ -84,12 +84,7 @@ function invokePreIssueHook(SetToken _setToken, uint256 _quantity, address _send
 ```solidity
 function _sync(ISetToken _setToken) internal {
     address[] memory airdrops = airdropModule.getAirdrops(_setToken);
-    address[] memory components = _setToken.getComponents();
-    for (uint256 i = 0; i < airdrops.length; i++) {
-        if (components.contains(airdrops[i])) {
-            _absorb(_setToken, airdrops[i]);
-        }
-    }
+    airdropModule.batchAbsorb(airdrops);
 }
 ```
 
