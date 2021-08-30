@@ -39,7 +39,7 @@ Under normal operation (not during rebalances), the only type of wrapped positio
 9/2: deployment scripts
 
 ## Checkpoint 1
-**Reviewer**:
+**Reviewer**: @richardliang
 
 ## Proposed Architecture Changes
 Add a new manager issuance hook called `AirdropIssuanceHook` which has a `invokePreIssueHook` function that uses the `AirdropModule` to sync all rebasing components. In order to add and remove new rebasing tokens, we need to add a new extension, `AirdropExtension` for interacting with the `AirdropModule`.
@@ -54,7 +54,7 @@ Add a new manager issuance hook called `AirdropIssuanceHook` which has a `invoke
     - For completeness, add all manager function of `AirdropModule` to this
 
 ## Checkpoint 2
-**Reviewer**:
+**Reviewer**: @richardliang
 
 ## Specification
 ### AirdropIssuanceHook
@@ -167,7 +167,7 @@ function updateAirdropFee(uint256 _newFee) external onlyOperator {
 ## Checkpoint 3
 Before we move onto the implementation phase we want to make sure that we are aligned on the spec. All contracts should be specced out, their state and external function signatures should be defined. For more complex contracts, internal function definition is preferred in order to align on proper abstractions. Reviewer should take care to make sure that all stake holders (product, app engineering) have their needs met in this stage.
 
-**Reviewer**:
+**Reviewer**: @richardliang
 
 ## Implementation
 [Link to implementation PR]()
