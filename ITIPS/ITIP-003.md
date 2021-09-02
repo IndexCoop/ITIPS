@@ -21,10 +21,20 @@ IP Rebalance Process:
 - Do we want to allow for partial wrapping/unwrapping (not wrapping/unwrapping full balance)?
 
 ## Feasibility Analysis
-- Direct interface for interacting with the `WrapModuleV2`
+Intrinsic Productivity Tokens
+
+|Token|Protocol|Module|Adapter|
+|-----|--------|------|-------|
+|aTokens|Aave|WrapModuleV2|AaveV2WrapV2Adapter|
+|cTokens|Compound|WrapModuleV2|CompoundWrapV2Adapter|
+|yearn vaults|Yearn|WrapModuleV2|YearnWrapV2Adapter|
+|imUSD|mStable|WrapModuleV2|MStableWrapV2Adapter (not built yet)|
+|curve LP tokens|Curve|AmmModule|CurveAmmAdapter (not built yet)|
+
+- Direct interface for interacting with the `WrapModuleV2` and `AmmModule`
     - Simple to implement
     - Requires many multisig transactions to execute rebalances
-- Direct interface with `WrapModuleV2` with extra `batchUnwrap` and `batchWrap` functions
+- Direct interface with `WrapModuleV2` and `AmmModule` with extra `batchUnwrap` and `batchWrap` functions
     - Simple to implement
     - Only requires one multisig transaction
     - If one wrap/unwrap action fails, whole transaction reverts
