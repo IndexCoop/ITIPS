@@ -23,13 +23,13 @@ IP Rebalance Process:
 ## Feasibility Analysis
 Intrinsic Productivity Tokens
 
-|Token|Protocol|Module|Adapter|
-|-----|--------|------|-------|
-|aTokens|Aave|WrapModuleV2|AaveV2WrapV2Adapter|
-|cTokens|Compound|WrapModuleV2|CompoundWrapV2Adapter|
-|yearn vaults|Yearn|WrapModuleV2|YearnWrapV2Adapter|
-|imUSD|mStable|WrapModuleV2|MStableWrapV2Adapter (not built yet)|
-|curve LP tokens|Curve|AmmModule|CurveAmmAdapter (not built yet)|
+|Token|Protocol|Module|Adapter|Notes|
+|-----|--------|------|-------|-----|
+|aTokens|Aave|WrapModuleV2|AaveV2WrapV2Adapter|rebasing|
+|cTokens|Compound|WrapModuleV2|CompoundWrapV2Adapter||
+|yearn vaults|Yearn|WrapModuleV2|YearnWrapV2Adapter||
+|imUSD|mStable|WrapModuleV2|MStableWrapV2Adapter|not built yet|
+|curve LP tokens|Curve|AmmModule|CurveAmmAdapter|not built yet, in PAY the LP tokens need to be wrapped into a yearn vault after|
 
 - Direct interface for interacting with the `WrapModuleV2` and `AmmModule`
     - Simple to implement
