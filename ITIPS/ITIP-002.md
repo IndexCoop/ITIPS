@@ -1,7 +1,7 @@
 # ITIP-002
 *Using template v0.1*
 ## Abstract
-Several upcoming IC products include some form of intrinsic productivity (IP) in their methodologies. In order to safely add these features, new tools must be built to manage these different yield positions.
+Several upcoming IC products include some form of intrinsic productivity (IP) in their methodologies. These products include yield bearing tokens which generally need to be wrapped and unwrapped via the wrap module. Some of these positions (such as aTokens) have balances that positively rebase as yield is accrued. Other components simply have a variable exchange rate between the underlying and wrapped token, allowing the wrapped token units to remain fixed. Finally, some components accrue yield in a secondary token, such as in the case of cTokens accruing COMP rewards. In order to safely add support for these kinds of positions, new tools must be built to manage these different yield positions.
 
 ## Motivation
 Adding IP to products cannot be done at just the smart contract level. We must also describe new processes for rebalancing and issuance/redemption. These features and processes will be required by the operators of IC products to set up an maintain products that include IP.
