@@ -34,12 +34,12 @@ Intrinsic Productivity Tokens
 - Direct interface for interacting with the `WrapModuleV2` and `AmmModule`
     - Simple to implement
     - Requires many multisig transactions to execute rebalances
-- Direct interface with `WrapModuleV2` and `AmmModule` with extra `batchUnwrap` and `batchWrap` functions
+- Direct interface with `WrapModuleV2` and `AmmModule` with extra batching functions
     - Simple to implement
     - Only requires one multisig transaction
     - If one wrap/unwrap action fails, whole transaction reverts
     - Might still need more than one multisig transaction if we run into gas limit issues
-- Parameterize wrapping/unwrapping in one operator transaction, then execute actual wraps and unwraps over multiple transactions from any allowed caller
+- Parameterize wrapping/unwrapping or depositing/withdrawing with `WrapModuleV2` or `AmmModule` in one operator transaction, then execute actual wraps and unwraps over multiple transactions from any allowed caller
     - Extra complexity
     - Only requires one multisig transaction
     - Actual wrapping and unwrapping action can be permissionless (similar to how `GeneralIndexModule` works)
