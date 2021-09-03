@@ -31,18 +31,42 @@ Intrinsic Productivity Tokens
 |imUSD|mStable|WrapModuleV2|MStableWrapV2Adapter|not built yet|
 |curve LP tokens|Curve|AmmModule|CurveAmmAdapter|not built yet, in PAY the LP tokens need to be wrapped into a yearn vault after|
 
-- Direct interface for interacting with the `WrapModuleV2` and `AmmModule`
-    - Simple to implement
-    - Requires many multisig transactions to execute rebalances
-- Direct interface with `WrapModuleV2` and `AmmModule` with extra batching functions
-    - Simple to implement
-    - Only requires one multisig transaction
-    - If one wrap/unwrap action fails, whole transaction reverts
-    - Might still need more than one multisig transaction if we run into gas limit issues
-- Parameterize wrapping/unwrapping or depositing/withdrawing with `WrapModuleV2` or `AmmModule` in one operator transaction, then execute actual wraps and unwraps over multiple transactions from any allowed caller
-    - Extra complexity
-    - Only requires one multisig transaction
-    - Actual wrapping and unwrapping action can be permissionless (similar to how `GeneralIndexModule` works)
+### Option 1: Direct interface for interacting with the `WrapModuleV2`
+- Simple to implement
+- Requires many multisig transactions to execute rebalances
+
+### Option 2: Direct interface with `WrapModuleV2` with extra batching functions
+- Simple to implement
+- Only requires one multisig transaction
+- If one wrap/unwrap action fails, whole transaction reverts
+- Might still need more than one multisig transaction if we run into gas limit issues
+
+### Option 3: Parameterize wrapping/unwrapping or depositing/withdrawing with `WrapModuleV2` in one operator transaction, then execute actual wraps and unwraps over multiple transactions from any allowed caller
+- Extra complexity
+- Only requires one multisig transaction
+- Actual wrapping and unwrapping action can be permissionless (similar to how `GeneralIndexModule` works)
+
+In this final solution, the rebalancing process would look like this:
+1. Ensure the extension knows how to wrap and unwrap each component
+    - This would only need to be done when a new wrapped component is added. After that it will be saved between rebalances
+    - Call `setWrapUnwrapInfo`
+        - stores the wrapped component, underlying component, and wrap adapter name
+2. Parametrize the wrapping action
+    - Call `startUnwrap`
+        - stores the components to unwrap and the amounts to unwrap (optionally can use MAX_UINT_256 to denote unwrapping all)
+3. Execute unwrap
+    - Call `execute`
+        - Goes through the list of components to unwrap provided in the previous step and unwraps one per call
+        - Can be marked `onlyAllowedCaller`
+4. Perform rebalance using `GIMExtension`
+    - This process would be unmodified from normal rebalances
+5. Parametrize the wrapping action
+    - Call `startWrap`
+        - stores the components to wrap and the amounts to wrap (optionally can use MAX_UINT_256 to denote wrapping all)
+6. Execute unwrap
+    - Call `execute`
+        - Goes through the list of components to unwrap provided in the previous step and wraps one per call
+        - Can be marked `onlyAllowedCaller`
 
 ## Timeline
 TBD
