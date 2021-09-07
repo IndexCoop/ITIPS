@@ -51,20 +51,24 @@ In this final solution, the rebalancing process would look like this:
     - This would only need to be done when a new wrapped component is added. After that it will be saved between rebalances
     - Call `setWrapUnwrapInfo`
         - stores the wrapped component, underlying component, and wrap adapter name
-2. Parametrize the wrapping action
-    - Call `startUnwrap`
-        - stores the components to unwrap and the amounts to unwrap (optionally can use MAX_UINT_256 to denote unwrapping all)
-3. Execute unwrap
+2. Parametrize the unwrapping and wrapping actions
+    - Set target wrapped units that the set should have after full rebalance process is completed
+    - When executing the unwrap in step 4 it will only unwrap components that have target wrapped units lower than the current
+    - When executing the unwrap in step 4 if target units are lower than current, only unwrap the difference
+3. Parameterize the rebalance
+    - Set target units for trading potion of rebalance
+    - Ensures that target units of any currently wrapped component remains unchanged
+    - Parameterizing this part can be tricky since the operator must remember that the new target units when wrapped will be added to the amount that remained wrapped.
+4. Execute unwrap
     - Call `execute`
         - Goes through the list of components to unwrap provided in the previous step and unwraps one per call
         - Can be marked `onlyAllowedCaller`
-4. Perform rebalance using `GIMExtension`
-    - This process would be unmodified from normal rebalances
-5. Parametrize the wrapping action
-    - Call `startWrap`
-        - stores the components to wrap and the amounts to wrap (optionally can use MAX_UINT_256 to denote wrapping all)
+5. Perform rebalance using `GeneralIndexModule`
+    - Uses info from step 3 to call `startRebalance`
+    - Rebalance can then be performed as usual.
 6. Execute unwrap
     - Call `execute`
+        - checks that trading is complete
         - Goes through the list of components to unwrap provided in the previous step and wraps one per call
         - Can be marked `onlyAllowedCaller`
 
