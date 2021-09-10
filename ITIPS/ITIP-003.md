@@ -83,6 +83,14 @@ Notes:
     - Removing a component
         - Set target units to 0 in step 2
 
+Changes to rebalancing utilities:
+- Since underlying units are what is needed for parameterization, changes will be minimal
+- Methodologists will likely want to provide the underlying units anyway
+- Only additional logic is to handle the cases where the percentage to re-wrap is not 100%
+    - Can be handled programmatically
+    - Methodologist should specify the underlying units as well as what it is being wrapped into
+    - In the case where an underlying unit is being wrapped into multiple wrapped components (or only partially wrapped), calculate the correct re-wrap percentage to supply
+
 ## Timeline
 TBD
 
