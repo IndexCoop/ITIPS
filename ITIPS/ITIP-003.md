@@ -41,36 +41,47 @@ Intrinsic Productivity Tokens
 - If one wrap/unwrap action fails, whole transaction reverts
 - Might still need more than one multisig transaction if we run into gas limit issues
 
-### Option 3: Parameterize wrapping/unwrapping or depositing/withdrawing with `WrapModuleV2` in one operator transaction, then execute actual wraps and unwraps over multiple transactions from any allowed caller
+### Option 3: Single extension for wrapping/unwrapping and trading (`IPExtension`)
 - Extra complexity
 - Only requires one multisig transaction
+- Better abstraction
 - Actual wrapping and unwrapping action can be permissionless (similar to how `GeneralIndexModule` works)
 
-In this final solution, the rebalancing process would look like this:
+Since wrapped components all have an exchange rate, this system can be built by just specifying the target units of the underlying components. In order to fetch exchange rates, `IWrapV2Adapter` can be extended to have a `getExchangeRate` function. To handle cases where both an underlying component can correlate to two different wrapped components (such as a set that contains aUSDC and cUSDC) or cases where a set contains both a wrapped and raw asset, we must also specify the percentage of the target units that will be wrapped.
+
+Below is the outline for executing a rebalance through this process:
+
 1. Ensure the extension knows how to wrap and unwrap each component
     - This would only need to be done when a new wrapped component is added. After that it will be saved between rebalances
-    - Call `setWrapUnwrapInfo`
-        - stores the wrapped component, underlying component, and wrap adapter name
-2. Parametrize the unwrapping and wrapping actions
-    - Set target wrapped units that the set should have after full rebalance process is completed
-    - When executing the unwrap in step 4 it will only unwrap components that have target wrapped units lower than the current
-    - When executing the unwrap in step 4 if target units are lower than current, only unwrap the difference
-3. Parameterize the rebalance
-    - Set target units for trading potion of rebalance
-    - Ensures that target units of any currently wrapped component remains unchanged
-    - Parameterizing this part can be tricky since the operator must remember that the new target units when wrapped will be added to the amount that remained wrapped.
-4. Execute unwrap
-    - Call `execute`
-        - Goes through the list of components to unwrap provided in the previous step and unwraps one per call
-        - Can be marked `onlyAllowedCaller`
-5. Perform rebalance using `GeneralIndexModule`
-    - Uses info from step 3 to call `startRebalance`
-    - Rebalance can then be performed as usual.
-6. Execute unwrap
-    - Call `execute`
-        - checks that trading is complete
-        - Goes through the list of components to unwrap provided in the previous step and wraps one per call
-        - Can be marked `onlyAllowedCaller`
+    - Stores the wrapped component, underlying component, and wrap adapter name
+2. Parametrize the rebalance
+    - Pass in the target underlying units as well as the percentage of each underlying unit that should be rewrapped into each corresponding wrapped unit
+    - By using the exchange rates, we can calculate the approximate amount of underlying components that the set contains. From there, we can calculate how much of each wrapped component to unwrap
+    - Using simple algebra, we can calculate the target units for the unwrapped components, and use that to parametrize the trading portion of the rebalance similar to how the `GIMExtension` works.
+    - When wrapping components after the trading portion has completed, we use a percentage based system to handle the cases where both a wrapped unit and its underlying should be components of the final set or when the final set contains two wrapped components with the same underlying. In sets where this is not the case, the operator will provide 100% as the amount to wrap.
+3. Execute unwrap
+    - Call `executeUnwrap` on `IPExtension`
+    - Goes through the list of components to unwrap calculated in the previous step and unwraps one per call
+    - Can be marked `onlyAllowedCaller`
+4. Execute trades
+    - Call `startRebalance` on `IPExtension`
+        - does not require any parameters since everything has been parametrized in step 2
+    - Perform trades through `GeneralIndexModule` exactly as they are done in a normal simple index rebalance
+5. Execute wrap
+    - Call `executeWrap` on `IPExtension`
+    - Goes though the list of components to wrap and calculates the amount to rewrap using the percentages supplied in step 2.
+    - Can be marked `onlyAllowedCaller`
+
+Notes:
+- No special logic needed for lossy wrapping/unwrapping
+    - since rebalancing trades are lossy anyway, not receiving exactly the correct unwrapped units won't cause any major problems
+    - since we provide percentages to re-wrap rather than absolute amounts, we do not need to worry about not receiving an exact amount of wrapped units back
+- Adding and removing components can be handled during steps 1 and 2.
+    - Adding a new component
+        - Add the adapter to use in step 1
+        - Perform step 2 as normally with the new component and the percentage to wrap in the component list
+    - Removing a component
+        - Set target units to 0 in step 2
 
 ## Timeline
 TBD
