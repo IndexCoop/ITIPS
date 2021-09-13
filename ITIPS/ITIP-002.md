@@ -51,7 +51,8 @@ Add a new manager issuance hook called `AirdropIssuanceHook` which has a `invoke
 - Has hooks for both issuance and redemption
     - Redemption hook not needed right now but future issuance modules may support it
 - `AirdropExtension` allows adding and removing airdrop tokens
-    - For completeness, add all manager function of `AirdropModule` to this
+    - Add all manager functions except for `updateFeeRecipient` and `updateAirdropFee`
+    - `initializeAirdropModule` will always change `feeRecipient` to the manager and `airdropFee` to zero
 
 ## Checkpoint 2
 **Reviewer**: @richardliang
@@ -104,6 +105,8 @@ function constructor(IBaseManager _manager, IAirdropModule _airdropModule) publi
 ```solidity
 function initializeAirdropModule(AirdropSettings memory _airdropSettings) external onlyOperator {
     // use invokeManager to do this
+    _airdropSettings.feeRecipient = manager;
+    _airdropSettings.airdropFee = 0;
     airdropModule.initialize(setToken, _airdropSettings);
 }
 ```
@@ -145,22 +148,6 @@ function removeAirdrop(address _token) external onlyOperator {
 function updateAnyoneAbsorb(bool _anyoneAbsorb) external onlyOperator {
     // use invokeManager to do this
     airdropModule.updateAnyoneAbsorb(setToken, _anyoneAbsorb);
-}
-```
-
-> updateFeeRecipient(address _newRecipient) external onlyOperator
-```solidity
-function updateFeeRecipient(address _newRecipient) external onlyOperator {
-    // use invokeManager to do this
-    airdropModule.updateFeeRecipient(setToken, _newRecipient);
-}
-```
-
-> updateAirdropFee(uint256 _newFee) external onlyOperator
-```solidity
-function updateAirdropFee(uint256 _newFee) external onlyOperator {
-    // use invokeManager to do this
-    airdropModule.updateAirdropFee(setToken, _newFee);
 }
 ```
 
