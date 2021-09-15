@@ -95,7 +95,7 @@ Changes to rebalancing utilities:
     - Methodologist should specify the underlying units as well as what it is being wrapped into
     - In the case where an underlying unit is being wrapped into multiple wrapped components (or only partially wrapped), calculate the correct re-wrap percentage to supply
 
-#### Examples 1: Rebalance between wrapped components
+#### Example 1: Rebalance between wrapped components
 |Start Component|Start Weight|End Component|End Weight|
 |---------------|------------|-------------|----------|
 |aWBTC|50%|aWBTC|30%|
@@ -122,7 +122,7 @@ c. Calculate target units for the GIM rebalance
 
 |Component|Target Units|
 |---------|------------|
-|wBTC|max(0, (1/1) * 0.0006 - 0.0.0006 = 0|
+|wBTC|max(0, (1/1) * 0.0006 - 0.0006 = 0|
 |DAI|(1/1) * 70 - 50 = 20|
 |aWBTC|0.0006|
 |aDAI|50|
