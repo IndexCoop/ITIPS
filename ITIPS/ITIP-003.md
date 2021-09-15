@@ -99,7 +99,7 @@ Changes to rebalancing utilities:
 |Start Component|Start Weight|End Component|End Weight|
 |---------------|------------|-------------|----------|
 |aWBTC|50%|aWBTC|30%|
-|aDAO|50%|aDAI|70%|
+|aDAI|50%|aDAI|70%|
 
 a. Pass in the target underlying units and amounts to be wrapped for each (assume BTC=$50k, DAI=$1, SET=$100)
 |Underlying|Underlying Target Units|Percentage Wrapped|
@@ -135,6 +135,39 @@ d. Calculate amount to rewrap
 |---------|--------------|
 |wBTC|0|
 |DAI|20|
+
+#### Example 2: Rebalance between wrapped component and its underlying
+|Start Component|Start Weight|End Component|End Weight|
+|---------------|------------|-------------|----------|
+|aDAI|50%|aDAI|70%|
+|DAI|50%|DAI|30%|
+
+a. Pass in the target underlying units and amounts to be wrapped for each (DAI=$1, SET=$100)  
+- percentage wrapped calculated by: underlyingUnitsInTarget / totalUnderlyingUnitsInSet
+
+|Underlying|Underlying Target Units|Percentage Wrapped|
+|----------|-----------------------|------------------|
+|aDAI|0.7 * 100 * 10^18 = 70 * 10^18|70%|
+|DAI|0.4 * 100 * 10^18 = 30 * 10^18|0% (irrelevant since component not wrapped)|
+
+b. Calculate the amount to unwrap by utilizing the exchange rate from unwrapped to wrapped tokens (aToken exchange rate is 1 to 1)  
+- underlying is calculated by: exchangeRate * currentWrappedUnits  
+- amount to unwrap is calculated by: max(0, currentUnderlying - targetUnderlying)  
+
+|Wrapped|Underlying|Exchange Rate|Underlying Amount| Amount to Unwrap|
+|-------|----------|-------------|-----------------|-----------------|
+|aDAI|DAI|1|1 * 50 * 10^18 = 50 * 10^18|max(0, 50 - 70) = 0|
+|none|DAI|1|50 * 10^18|0|
+
+c. Calculate target units for the GIM rebalance  
+- Since the underlying units are all the same, no trades required
+
+d. Calculate amount to rewrap
+- amount to wrap is calculated by: (wrappedPercentage * totalUnderlyingUnitsInSet) - startingUnderlyingUnitsFromWrappedComponent
+
+|Component|Amount to Wrap|
+|---------|--------------|
+|DAI|0.70 * 100 - 50 = 20|
 
 
 
