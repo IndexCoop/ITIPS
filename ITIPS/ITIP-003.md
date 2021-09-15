@@ -49,7 +49,7 @@ Note: tokens with lockups will not be supported
 - Better abstraction
 - Actual wrapping and unwrapping action can be permissionless (similar to how `GeneralIndexModule` works)
 
-Since wrapped components all have an exchange rate, this system can be built by just specifying the target units of the underlying components. In order to fetch exchange rates, a helper contract of interface`IWrapOracle` can be added to have a `getExchangeRate` function. To handle cases where both an underlying component can correlate to two different wrapped components (such as a set that contains aUSDC and cUSDC) or cases where a set contains both a wrapped and raw asset, we must also specify the percentage of the target units that will be wrapped.
+Since wrapped components all have an exchange rate, this system can be built by just specifying the target units of the underlying components. In order to fetch exchange rates, a helper contract of interface`IWrapOracle` can be added to have a `getExchangeRate` function. To handle cases where both an underlying component can correlate to two different wrapped components (such as a set that contains aUSDC and cUSDC), we must also specify the percentage of the target units that will be wrapped.
 
 Below is the outline for executing a rebalance through this process:
 
@@ -61,7 +61,7 @@ Below is the outline for executing a rebalance through this process:
         - If a components target units are being set to 0, store MAX_UINT_256 as the amount to unwrap. This allows us to enforce that 100% of a token is being unwrapped in step 3 (which might otherwise not be the case if a token positively rebases between steps 2 and 3).
     - By using the exchange rates, we can calculate the approximate amount of underlying components that the set contains. From there, we can calculate how much of each wrapped component to unwrap. Need to call `AirdropModule` here to handle rebasing tokens.
     - Using simple algebra, we can calculate the target units for the unwrapped components, and use that to parametrize the trading portion of the rebalance similar to how the `GIMExtension` works.
-    - When wrapping components after the trading portion has completed, we use a percentage based system to handle the cases where both a wrapped unit and its underlying should be components of the final set or when the final set contains two wrapped components with the same underlying. In sets where this is not the case, the operator will provide 100% as the amount to wrap.
+    - When wrapping components after the trading portion has completed, we use a percentage based system to handle the cases where the final set contains two wrapped components with the same underlying. In sets where this is not the case, the operator will always provide 100% as the amount to wrap.
 3. Execute unwrap
     - Call `executeUnwrap` on `IPExtension`
     - Goes through the list of components to unwrap calculated in the previous step and unwraps one per call
@@ -86,6 +86,7 @@ Notes:
         - Perform step 2 as normally with the new component and the percentage to wrap in the component list
     - Removing a component
         - Set target units to 0 in step 2
+- Situations where a wrapped component and its underlying are present in the final set will be disallowed
 
 Changes to rebalancing utilities:
 - Methodologists will provide percentage based weights.
@@ -136,38 +137,53 @@ d. Calculate amount to rewrap
 |wBTC|0|
 |DAI|20|
 
-#### Example 2: Rebalance between wrapped component and its underlying
+#### Example 2: Rebalance with multiple wrapped components with same underlying
 |Start Component|Start Weight|End Component|End Weight|
 |---------------|------------|-------------|----------|
-|aDAI|50%|aDAI|70%|
-|DAI|50%|DAI|30%|
+|aDAI|40%|aDAI|50%|
+|cDAI|35%|cDAI|40%|
+|aUSDC|25%|aUSDC|10%|
 
-a. Pass in the target underlying units and amounts to be wrapped for each (DAI=$1, SET=$100)  
-- percentage wrapped calculated by: underlyingUnitsInTarget / totalUnderlyingUnitsInSet
+a. Pass in the target underlying units and amounts to be wrapped for each (DAI=$1, USDC=1$, SET=$100)  
+- percentage wrapped calculated by: underlyingUnitsInTarget / totalUnderlyingUnitsInTarget
 
 |Underlying|Underlying Target Units|Percentage Wrapped|
 |----------|-----------------------|------------------|
-|aDAI|0.7 * 100 * 10^18 = 70 * 10^18|70%|
-|DAI|0.4 * 100 * 10^18 = 30 * 10^18|0% (irrelevant since component not wrapped)|
+|aDAI|0.5 * 100 * 10^18 = 50 * 10^18|50/(50+40) = 55.55%|
+|DAI|0.4 * 100 * 10^18 = 40 * 10^18|40/(50+40) = 44.44%)|
+|aUSDC|0.1 * 100 * 10^6 = 10 * 10^6|100%|
 
-b. Calculate the amount to unwrap by utilizing the exchange rate from unwrapped to wrapped tokens (aToken exchange rate is 1 to 1)  
+b. Calculate the amount to unwrap by utilizing the exchange rate from unwrapped to wrapped tokens (assume aToken and cToken exchange rate is 1 to 1)  
 - underlying is calculated by: exchangeRate * currentWrappedUnits  
 - amount to unwrap is calculated by: max(0, currentUnderlying - targetUnderlying)  
 
 |Wrapped|Underlying|Exchange Rate|Underlying Amount| Amount to Unwrap|
 |-------|----------|-------------|-----------------|-----------------|
-|aDAI|DAI|1|1 * 50 * 10^18 = 50 * 10^18|max(0, 50 - 70) = 0|
-|none|DAI|1|50 * 10^18|0|
+|aDAI|DAI|1|1 * 40 * 10^18 = 40 * 10^18|max(0, 40 - 50) = 0|
+|cDAI|DAI|1|35 * 10^18|max(0, 35-40) =  0|
+|aUSDC|USDC|1|25 * 10^6|max(0, 25-10) = 15|
 
 c. Calculate target units for the GIM rebalance  
-- Since the underlying units are all the same, no trades required
+- if it is a wrapped component, target units are always equal to the amount of wrapped units that will remain after unwrap step
+- if it is an underlying component, target units are: max(0, (1/exchangeRate) * finalUnderlyingUnits - startingUnderlyingUnits)
+    - if multiple components have the same underlying, underlying units is the combined amount
+
+|Component|Target Units|
+|---------|------------|
+|DAI|max(0, (1/1) * (50+40) - (40+35)) =  15|
+|USDC|max(0, 10-25) = 0|
+|aDAI|40|
+|cDAI|35|
+|aUSDC|10|
 
 d. Calculate amount to rewrap
+- since executing the trades can cause slippage, this step should be done after the rebalance via GIM.
 - amount to wrap is calculated by: (wrappedPercentage * totalUnderlyingUnitsInSet) - startingUnderlyingUnitsFromWrappedComponent
 
-|Component|Amount to Wrap|
+|Wrapped Component|Amount to Wrap|
 |---------|--------------|
-|DAI|0.70 * 100 - 50 = 20|
+|aDAI|0.5555 * 90 - 40 = 9.995|
+|aUSDC|0.4444 * 90 - 35 = 4.996|
 
 
 
