@@ -95,6 +95,49 @@ Changes to rebalancing utilities:
     - Methodologist should specify the underlying units as well as what it is being wrapped into
     - In the case where an underlying unit is being wrapped into multiple wrapped components (or only partially wrapped), calculate the correct re-wrap percentage to supply
 
+#### Examples 1: Rebalance between wrapped components
+|Start Component|Start Weight|End Component|End Weight|
+|---------------|------------|-------------|----------|
+|aWBTC|50%|aWBTC|30%|
+|aDAO|50%|aDAI|70%|
+
+a. Pass in the target underlying units and amounts to be wrapped for each (assume BTC=$50k, DAI=$1, SET=$100)
+|Underlying|Underlying Target Units|Percentage Wrapped|
+|----------|-----------------------|------------------|
+|wBTC|0.3 * 100 / 50000 * 10^8 = 0.0006 * 10^8|100%|
+|DAI|0.7 * 100 / 1 * 10^18 = 70 * 10^18|100%|
+
+b. Calculate the amount to unwrap by utilizing the exchange rate from unwrapped to wrapped tokens (aToken exchange rate is 1 to 1)  
+- underlying is calculated by: exchangeRate * currentWrappedUnits  
+- amount to unwrap is calculated by: max(0, currentUnderlying - targetUnderlying)  
+
+|Wrapped|Underlying|Exchange Rate|Underlying Amount| Amount to Unwrap|
+|-------|----------|-------------|-----------------|-----------------|
+|aWBTC|wBTC|1|1 * (0.5 * 100 / 50000 * 10^8) = 0.001 * 10^8|max(0, 0.001 - 0.0006) = 0.0004|
+|aDAI|DAI|1|1 * (0.5 * 100 / 1 * 10^18) = 50 * 10^18|max(0, 50 - 70) = 0|
+
+c. Calculate target units for the GIM rebalance  
+- if it is a wrapped component, target units are always equal to the amount of wrapped units that will remain after unwrap step
+- if it is an underlying component, target units are: (1/exchangeRate) * finalUnderlyingUnits - startingUnderlyingUnits  
+
+|Component|Target Units|
+|---------|------------|
+|wBTC|max(0, (1/1) * 0.0006 - 0.0.0006 = 0|
+|DAI|(1/1) * 70 - 50 = 20|
+|aWBTC|0.0006|
+|aDAI|50|
+
+d. Calculate amount to rewrap
+- since executing the trades can cause slippage, this step should be done after the rebalance via GIM.
+- amount to wrap will just be equal to the total underlying amount since percentage for each component is 100%
+
+|Component|Amount to Wrap|
+|---------|--------------|
+|wBTC|0|
+|DAI|20|
+
+
+
 ## Timeline
 TBD
 
