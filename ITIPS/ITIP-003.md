@@ -29,7 +29,9 @@ Intrinsic Productivity Tokens
 |cTokens|Compound|WrapModuleV2|CompoundWrapV2Adapter||
 |yearn vaults|Yearn|WrapModuleV2|YearnWrapV2Adapter||
 |imUSD|mStable|WrapModuleV2|MStableWrapV2Adapter|not built yet|
-|curve LP tokens|Curve|AmmModule|CurveAmmAdapter|not built yet, in PAY the LP tokens need to be wrapped into a yearn vault after|
+|curve LP tokens|Curve|AmmModule|CurveAmmAdapter|not built yet, might be able to avoid using the deposit module by zapping in|
+
+Note: tokens with lockups will not be supported
 
 ### Option 1: Direct interface for interacting with the `WrapModuleV2`
 - Simple to implement
@@ -47,7 +49,7 @@ Intrinsic Productivity Tokens
 - Better abstraction
 - Actual wrapping and unwrapping action can be permissionless (similar to how `GeneralIndexModule` works)
 
-Since wrapped components all have an exchange rate, this system can be built by just specifying the target units of the underlying components. In order to fetch exchange rates, `IWrapV2Adapter` can be extended to have a `getExchangeRate` function. To handle cases where both an underlying component can correlate to two different wrapped components (such as a set that contains aUSDC and cUSDC) or cases where a set contains both a wrapped and raw asset, we must also specify the percentage of the target units that will be wrapped.
+Since wrapped components all have an exchange rate, this system can be built by just specifying the target units of the underlying components. In order to fetch exchange rates, a helper contract of interface`IWrapOracle` can be added to have a `getExchangeRate` function. To handle cases where both an underlying component can correlate to two different wrapped components (such as a set that contains aUSDC and cUSDC) or cases where a set contains both a wrapped and raw asset, we must also specify the percentage of the target units that will be wrapped.
 
 Below is the outline for executing a rebalance through this process:
 
@@ -56,7 +58,8 @@ Below is the outline for executing a rebalance through this process:
     - Stores the wrapped component, underlying component, and wrap adapter name
 2. Parametrize the rebalance
     - Pass in the target underlying units as well as the percentage of each underlying unit that should be rewrapped into each corresponding wrapped unit
-    - By using the exchange rates, we can calculate the approximate amount of underlying components that the set contains. From there, we can calculate how much of each wrapped component to unwrap
+        - If a components target units are being set to 0, store MAX_UINT_256 as the amount to unwrap. This allows us to enforce that 100% of a token is being unwrapped in step 3 (which might otherwise not be the case if a token positively rebases between steps 2 and 3).
+    - By using the exchange rates, we can calculate the approximate amount of underlying components that the set contains. From there, we can calculate how much of each wrapped component to unwrap. Need to call `AirdropModule` here to handle rebasing tokens.
     - Using simple algebra, we can calculate the target units for the unwrapped components, and use that to parametrize the trading portion of the rebalance similar to how the `GIMExtension` works.
     - When wrapping components after the trading portion has completed, we use a percentage based system to handle the cases where both a wrapped unit and its underlying should be components of the final set or when the final set contains two wrapped components with the same underlying. In sets where this is not the case, the operator will provide 100% as the amount to wrap.
 3. Execute unwrap
@@ -73,9 +76,10 @@ Below is the outline for executing a rebalance through this process:
     - Can be marked `onlyAllowedCaller`
 
 Notes:
-- No special logic needed for lossy wrapping/unwrapping
+- Logic for lossy wrapping/unwrapping
     - since rebalancing trades are lossy anyway, not receiving exactly the correct unwrapped units won't cause any major problems
     - since we provide percentages to re-wrap rather than absolute amounts, we do not need to worry about not receiving an exact amount of wrapped units back
+    - in the case of tokens that should not be wrapped or unwrapped at certain times, we can add `shouldWrap` and `shouldUnwrap` functions to `IWrapOracle` that can prevent the execution of a suboptimal wrap or unwrap.
 - Adding and removing components can be handled during steps 1 and 2.
     - Adding a new component
         - Add the adapter to use in step 1
@@ -84,9 +88,9 @@ Notes:
         - Set target units to 0 in step 2
 
 Changes to rebalancing utilities:
-- Since underlying units are what is needed for parameterization, changes will be minimal
-- Methodologists will likely want to provide the underlying units anyway
-- Only additional logic is to handle the cases where the percentage to re-wrap is not 100%
+- Methodologists will provide percentage based weights.
+- Since the contract requires units be given in the underlying components, calculating units should be easy by fetching underlying component prices.
+- Additional logic is to handle the cases where the percentage to re-wrap is not 100%
     - Can be handled programmatically
     - Methodologist should specify the underlying units as well as what it is being wrapped into
     - In the case where an underlying unit is being wrapped into multiple wrapped components (or only partially wrapped), calculate the correct re-wrap percentage to supply
