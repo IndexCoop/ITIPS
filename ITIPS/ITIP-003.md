@@ -123,7 +123,7 @@ c. Calculate target units for the GIM rebalance
 
 |Component|Target Units|
 |---------|------------|
-|wBTC|max(0, (1/1) * 0.0006 - 0.0006 = 0|
+|wBTC|max(0, (1/1) * 0.0006 - 0.0006) = 0|
 |DAI|(1/1) * 70 - 50 = 20|
 |aWBTC|0.0006|
 |aDAI|50|
@@ -159,7 +159,7 @@ b. Calculate the amount to unwrap by utilizing the exchange rate from unwrapped 
 
 |Wrapped|Underlying|Exchange Rate|Underlying Amount| Amount to Unwrap|
 |-------|----------|-------------|-----------------|-----------------|
-|aDAI|DAI|1|1 * 40 * 10^18 = 40 * 10^18|max(0, 40 - 50) = 0|
+|aDAI|DAI|1|40 * 10^18 = 40 * 10^18|max(0, 40 - 50) = 0|
 |cDAI|DAI|1|35 * 10^18|max(0, 35-40) =  0|
 |aUSDC|USDC|1|25 * 10^6|max(0, 25-10) = 15|
 
@@ -171,7 +171,7 @@ c. Calculate target units for the GIM rebalance
 |Component|Target Units|
 |---------|------------|
 |DAI|max(0, (1/1) * (50+40) - (40+35)) =  15|
-|USDC|max(0, 10-25) = 0|
+|USDC|max(0, (1/1) * 10-25) = 0|
 |aDAI|40|
 |cDAI|35|
 |aUSDC|10|
