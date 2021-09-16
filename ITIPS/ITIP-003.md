@@ -86,7 +86,6 @@ Notes:
         - Perform step 2 as normally with the new component and the percentage to wrap in the component list
     - Removing a component
         - Set target units to 0 in step 2
-- Situations where a wrapped component and its underlying are present in the final set will be disallowed
 
 Changes to rebalancing utilities:
 - Methodologists will provide percentage based weights.
@@ -150,7 +149,7 @@ a. Pass in the target underlying units and amounts to be wrapped for each (DAI=$
 |Underlying|Underlying Target Units|Percentage Wrapped|
 |----------|-----------------------|------------------|
 |aDAI|0.5 * 100 * 10^18 = 50 * 10^18|50/(50+40) = 55.55%|
-|DAI|0.4 * 100 * 10^18 = 40 * 10^18|40/(50+40) = 44.44%)|
+|cDAI|0.4 * 100 * 10^18 = 40 * 10^18|40/(50+40) = 44.44%)|
 |aUSDC|0.1 * 100 * 10^6 = 10 * 10^6|100%|
 
 b. Calculate the amount to unwrap by utilizing the exchange rate from unwrapped to wrapped tokens (assume aToken and cToken exchange rate is 1 to 1)  
@@ -183,7 +182,55 @@ d. Calculate amount to rewrap
 |Wrapped Component|Amount to Wrap|
 |---------|--------------|
 |aDAI|0.5555 * 90 - 40 = 9.995|
-|aUSDC|0.4444 * 90 - 35 = 4.996|
+|cDAI|0.4444 * 90 - 35 = 4.996|
+
+#### Example 3: Rebalance with wrapped component with and underlying
+|Start Component|Start Weight|End Component|End Weight|
+|---------------|------------|-------------|----------|
+|aDAI|40%|aDAI|50%|
+|DAI|35%|DAI|40%|
+|aUSDC|25%|aUSDC|10%|
+
+a. Pass in the target underlying units and amounts to be wrapped for each (DAI=$1, USDC=1$, SET=$100)  
+- percentage wrapped calculated by: underlyingUnitsInTarget / totalUnderlyingUnitsInTarget
+
+|Underlying|Underlying Target Units|Percentage Wrapped|
+|----------|-----------------------|------------------|
+|aDAI|0.5 * 100 * 10^18 = 50 * 10^18|50/(50+40) = 55.55%|
+|DAI|0.4 * 100 * 10^18 = 40 * 10^18|0%|
+|aUSDC|0.1 * 100 * 10^6 = 10 * 10^6|100%|
+
+b. Calculate the amount to unwrap by utilizing the exchange rate from unwrapped to wrapped tokens (assume aToken and cToken exchange rate is 1 to 1)  
+- underlying is calculated by: exchangeRate * currentWrappedUnits  
+- amount to unwrap is calculated by: max(0, currentUnderlying - targetUnderlying)  
+
+|Wrapped|Underlying|Exchange Rate|Underlying Amount| Amount to Unwrap|
+|-------|----------|-------------|-----------------|-----------------|
+|aDAI|DAI|1|40 * 10^18 = 40 * 10^18|max(0, 40 - 50) = 0|
+|none|DAI|1|35 * 10^18|0|
+|aUSDC|USDC|1|25 * 10^6|max(0, 25-10) = 15|
+
+c. Calculate target units for the GIM rebalance  
+- if it is a wrapped component, target units are always equal to the amount of wrapped units that will remain after unwrap step
+- if it is an underlying component, target units are: max(0, (1/exchangeRate) * finalUnderlyingUnits - startingUnderlyingUnits) + startingUnitsFromUnderlyingComponent
+    - if multiple components have the same underlying, underlying units is the combined amount
+    - startingUnitsFromUnderlyingComponent refers to the initial DAI component units in the Set
+
+|Component|Target Units|
+|---------|------------|
+|DAI|max(0, (1/1) * (50+40) - (40+35) + 35) =  50|
+|USDC|max(0, (1/1) * 10-25) = 0|
+|aDAI|40|
+|aUSDC|10|
+
+d. Calculate amount to rewrap
+- since executing the trades can cause slippage, this step should be done after the rebalance via GIM.
+- amount to wrap is calculated by: (wrappedPercentage * totalUnderlyingUnitsInSet) - startingUnderlyingUnitsFromWrappedComponent
+
+|Wrapped Component|Amount to Wrap|
+|---------|--------------|
+|aDAI|0.5555 * 90 - 40 = 9.995|
+
 
 
 
