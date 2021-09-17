@@ -43,7 +43,7 @@ Note: tokens with lockups will not be supported
 - If one wrap/unwrap action fails, whole transaction reverts
 - Might still need more than one multisig transaction if we run into gas limit issues
 
-### Option 3: Single extension for wrapping/unwrapping and trading (`IPExtension`)
+### Option 3: Single extension for wrapping/unwrapping and trading (`IPRebalanceExtension`)
 - Extra complexity
 - Only requires one multisig transaction
 - Better abstraction
@@ -63,15 +63,15 @@ Below is the outline for executing a rebalance through this process:
     - Using simple algebra, we can calculate the target units for the unwrapped components, and use that to parametrize the trading portion of the rebalance similar to how the `GIMExtension` works.
     - When wrapping components after the trading portion has completed, we use a percentage based system to handle the cases where the final set contains two wrapped components with the same underlying. In sets where this is not the case, the operator will always provide 100% as the amount to wrap.
 3. Execute unwrap
-    - Call `executeUnwrap` on `IPExtension`
+    - Call `executeUnwrap` on `IPRebalanceExtension`
     - Goes through the list of components to unwrap calculated in the previous step and unwraps one per call
     - Can be marked `onlyAllowedCaller`
 4. Execute trades
-    - Call `startRebalance` on `IPExtension`
+    - Call `startRebalance` on `IPRebalanceExtension`
         - does not require any parameters since everything has been parametrized in step 2
     - Perform trades through `GeneralIndexModule` exactly as they are done in a normal simple index rebalance
 5. Execute wrap
-    - Call `executeWrap` on `IPExtension`
+    - Call `executeWrap` on `IPRebalanceExtension`
     - Goes though the list of components to wrap and calculates the amount to rewrap using the percentages supplied in step 2.
     - Can be marked `onlyAllowedCaller`
 
@@ -238,22 +238,42 @@ d. Calculate amount to rewrap
 TBD
 
 ## Checkpoint 1
-Before more in depth design of the contract flows lets make sure that all the work done to this point has been exhaustive. It should be clear what we're doing, why, and for who. All necessary information on external protocols should be gathered and potential solutions considered. At this point we should be in alignment with product on the non-technical requirements for this feature. It is up to the reviewer to determine whether we move onto the next step.
-
 **Reviewer**:
 
 ## Proposed Architecture Changes
-A diagram would be helpful here to see where new feature slot into the system. Additionally a brief description of any new contracts is helpful.
+Managers will rebalance intrinsically productive Sets through a new extension called `IPRebalanceExtension`. `IPRebalanceExtension` will makes calls to oracle contracts that adhere to a new `IWrapOracle` interface. This interface will contain `getExchangeRate`, `shouldWrap` and `shouldUnwrap` view functions which `IPRebalanceExtension` will consume. No changes will be required to the existing manager contracts or to Set Protocol contracts.
 
 <img src="../assets/ITIP-003/ip-diagram.jpg" width="50%" />
 
 ## Requirements
-These should be a distillation of the previous two sections taking into account the decided upon high-level implementation. Each flow should have high level requirements taking into account the needs of participants in the flow (users, managers, market makers, app devs, etc) 
-## User Flows
-- Highlight *each* external flow enabled by this feature. It's helpful to use diagrams (add them to the `assets` folder). Examples can be very helpful, make sure to highlight *who* is initiating this flow, *when* and *why*. A reviewer should be able to pick out what requirements are being covered by this flow.
-## Checkpoint 2
-Before we spec out the contract(s) in depth we want to make sure that we are aligned on all the technical requirements and flows for contract interaction. Again the who, what, when, why should be clearly illuminated for each flow. It is up to the reviewer to determine whether we move onto the next step.
+- Calculating amounts to wrap and unwrap is abstracted away from operator.
+- Which wrap adapter and wrap oracle to use for a particular wrapped component is set only when the component is first added, and does not need to be inputted again.
+- Operator only inputs weights denominated in underlying units.
+- Actual rebalance weight calculation abstracted away from operator.
+- Support Sets with multiple wrapped assets with the same underlying component.
+- Supports Sets that contain both a wrapped asset and its underlying component.
 
+## User Flows
+### Operator wants to add a new wrapped component
+1. Deploy a new contract adhering to the `IWrapOracle` interface for the new component if one does not already exist.
+2. Deploy a new contract adhering to the `IWrapV2Adapter` and add it to the integration registry of Set Protocol.
+3. Call `setWrapInfo` on `IPRebalanceExtension` and pass in the address of the wrapped component, underlying component, and wrap oracle, and the name of the wrap adapter.
+
+### Operator wants to update a components wrap info
+1. Call `setWrapInfo` on `IPRebalanceExtension` and pass in the address of the wrapped component, underlying component, and wrap oracle, and the name of the wrap adapter.
+
+### Operator wants to rebalance
+1. Check to ensure all wrapped components in both the pre and post rebalance state have an associated wrap info setting.
+2. Set the trade maximums, exchanges, cooldown periods, exchange data, target percentage, trader status, and anyone trade status for the `GeneralIndexModule`
+    - the interface for these actions will be identical to the same actions of `GIMExtension`
+3. Call `startRebalance` and pass in the components, units (denominated in the underlying component if applicable), and the wrap percentage (if applicable).
+4. Call `executeUnwrap` repeatedly until all wrapped component have been unwrapped.
+    - Use a helper `unwrapComplete` function to check whether to stop unwrapping
+5. On the last `executeUnwrap` call, the `GeneralIndexModule` will automatically be initialized. At this point it is safe to execute a rebalance as normally through the `GeneralIndexModule`
+6. Once the rebalancing trades are complete, call `executeWrap` repeatedly until all component have been wrapped
+    - Use a helper `wrapComplete` function to check whether to stop wrapping
+
+## Checkpoint 2
 **Reviewer**:
 
 Reviewer: []
