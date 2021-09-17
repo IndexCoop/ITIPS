@@ -276,32 +276,77 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 ## Checkpoint 2
 **Reviewer**:
 
-Reviewer: []
 ## Specification
-### [Contract Name]
+### IPRebalanceExtension
 #### Inheritance
-- List inherited contracts
+- IBaseExtension
 #### Structs
+- WrapInfo  
+
 | Type 	| Name 	| Description 	|
 |------	|------	|-------------	|
-|address|manager|Address of the manager|
-|uint256|iterations|Number of times manager has called contract|  
-#### Constants
-| Type 	| Name 	| Description 	| Value 	|
-|------	|------	|-------------	|-------	|
-|uint256|ONE    | The number one| 1       	|
+|IERC20|underlyingComponent|Instance of the wrapped component|
+|IWrapOracle|wrapOracle|Instance of the wrap oracle|
+|string|wrapAdapter|Name of the WrapModuleV2 adapter|
+
 #### Public Variables
 | Type 	| Name 	| Description 	|
 |------	|------	|-------------	|
-|uint256|hodlers|Number of holders of this token|
-#### Modifiers
-> onlyManager(SetToken _setToken)
-#### Functions
-> issue(SetToken _setToken, uint256 quantity) external
-- Pseudo code
-## Checkpoint 3
-Before we move onto the implementation phase we want to make sure that we are aligned on the spec. All contracts should be specced out, their state and external function signatures should be defined. For more complex contracts, internal function definition is preferred in order to align on proper abstractions. Reviewer should take care to make sure that all stake holders (product, app engineering) have their needs met in this stage.
+|IGeneralIndexModule|generalIndexModule|Instance of the GeneralIndexModule|
+|IWrapModuleV2|wrapModule|Instance of the WrapModuleV2|
+|mapping(address => WrapInfo)|wrappedComponentsInfo|Mapping from wrapped component address to WrapInfo|
 
+#### Functions
+Note: functions that appear in `GIMExtension` that will be replicated in `IPRebalanceExtension` will not be described below
+
+> setWrapInfo(address _wrappedComponent, WrapInfo _wrapInfo) external 
+```solidity
+function setWrapInfo(WrapInfo _wrapInfo) external {
+    wrappedComponentsInfo[_wrappedComponent] = _wrapInfo;
+}
+```
+
+> startRebalance(address[] calldata _components, uint256[] calldata _targetUnits, uint256[] calldata _wrapPercentages) external
+```solidity
+function startRebalance(address[] calldata _components, uint256[] calldata _targetUnits, uint256[] calldata _wrapPercentages) external {
+    _validateRebalanceParams(_components, _targetUnits, _wrapPercentages);
+    _beginUnwrap(_component, _targetUnits, _wrapPercentages);
+}
+```
+
+> executeUnwrap(address _wrappedComponent) external
+```solidity
+function executeUnwrap(address _wrappedComponent) external {
+    require(!_isUnwrapComplete(), "IPRebalanceExtension: unwrap complete");
+
+    uint256 unwrapUnits = _getUnwrapAmount(_wrappedComponent);
+    WrapInfo wrapInfo = wrappedComponentsInfo[wrappedComponent];
+
+    require(wrapInfo.wrapOracle.shouldUnwrap(), "IPRebalanceExtension: unwrap unavailable");
+
+    _unwrapComponent(_wrappedComponent, wrapInfo, unwrapUnits);
+
+    if (_isLastUnwrap()) {
+        _startGIMRebalance();
+    }
+}
+```
+
+> executeUnwrap(address _wrappedComponent) external
+```solidity
+function executeWrap(address _wrappedComponent) external {
+    require(!_isWrapComplete(), "IPRebalanceExtension: wrap complete");
+
+    uint256 wrapUnits = _getWrapAmount(_wrappedComponent);
+    WrapInfo wrapInfo = wrappedComponentsInfo[wrappedComponent];
+
+    require(wrapInfo.wrapOracle.shouldWrap(), "IPRebalanceExtension: wrap unavailable");
+
+    _wrapComponent(_wrappedComponent, wrapInfo, wrapUnits);
+}
+```
+
+## Checkpoint 3
 **Reviewer**:
 
 ## Implementation
