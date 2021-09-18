@@ -288,7 +288,6 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 |------	|------	|-------------	|
 |IERC20|underlyingComponent|Instance of the wrapped component|
 |ITransformHelper|transformHelper|Instance of the transform helper|
-|string|wrapAdapter|Name of the WrapModuleV2 adapter|
 
 #### Public Variables
 | Type 	| Name 	| Description 	|
