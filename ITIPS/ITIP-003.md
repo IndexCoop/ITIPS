@@ -286,19 +286,19 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 
 | Type 	| Name 	| Description 	|
 |------	|------	|-------------	|
-|IERC20|underlyingComponent|Instance of the wrapped component|
-|ITransformHelper|transformHelper|Instance of the transform helper|
+|address|underlyingComponent|address of the underlying component|
+|ITransformHelper|transformHelper|Instance of a transform helper|
 
 #### Public Variables
 | Type 	| Name 	| Description 	|
 |------	|------	|-------------	|
 |IGeneralIndexModule|generalIndexModule|Instance of the GeneralIndexModule|
-|mapping(address => WrapInfo)|transformComponentsInfo|Mapping from transformed component address to WrapInfo|
+|mapping(address => TransformInfo)|transformComponentsInfo|Mapping from transformed component address to TransformInfo|
 
 #### Functions
 Note: functions that appear in `GIMExtension` that will be replicated in `IPRebalanceExtension` will not be described below
 
-> setWrapInfo(address _transformedComponent, TransformInfo _transformInfo) external 
+> setTransformInfo(address _transformedComponent, TransformInfo _transformInfo) external 
 ```solidity
 function setTransformInfo(address _transformedComponent, TransformInfo _transformInfo) external onlyOperator {
     transformComponentsInfo[_transformedComponent] = _transformInfo;
@@ -317,7 +317,7 @@ function startRebalance(address[] memory _components, uint256[] memory _targetUn
 
             uint256 currentUnits = _getCurrentUnits(_components[i]);
 
-            // convert target units from underlying to wrapped amounts
+            // convert target units from underlying to transformed amounts
             TransformInfo transformInfo = transformComponentsInfo[_components[i]];
             uint256 exchangeRate = transformInfo.transformHelper.getExchangeRate(underlyingComponent, _components[i]);
             uint256 targetUnitsInTransformed = _targetUnitsUnderlying[i].mul(exchangeRate);
@@ -443,8 +443,7 @@ function _startGIMRebalance() internal {
 
     for (uint256 i = 0; i < components.length; i++) {
         if (_isTransformComponent(components[i])) {
-            uint256 units = _getCurrentUnits(components[i]);
-            rebalanceTargets[i] = units;
+            rebalanceTargets[i] = _getCurrentUnits(components[i]);
         } else {
             TransformInfo transformInfo = transformComponentsInfo[_components[i]];
             uint256 exchangeRate = transformInfo.transformHelper.getExchangeRate(underlyingComponent, _components[i]);
