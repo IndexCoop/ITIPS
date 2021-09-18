@@ -272,7 +272,10 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 4. Call `executeUntransform` for each transformed component that must be untransformed
     - pass in the component to untransform and the untransform data
     - untransform data can be fetched using the corresponding transform helper contract
-5. On the last `executeUntransform` call, the `GeneralIndexModule` will automatically be initialized. At this point it is safe to execute a rebalance as normally through the `GeneralIndexModule`
+5. Execute trades
+    - On the last `executeUntransform` call, the `GeneralIndexModule` will automatically be initialized
+    - Since some of the components in the set may rebase, trades need to be executed through a dedicated `trade` function on `IPRebalanceExtension` which absorbs all rebase components and then forwards the trade to `GeneralIndexModule`
+    - To make this work, `IPRebalanceExtension` must be set as an allowed caller in `GeneralIndexModule`
 6. Once rebalancing trades are complete call `setTradesComplete` to denote that we are ready to transform components.
 7. Once the rebalancing trades are complete, call `executeTransform` repeatedly until all component have been transformed
     - pass in the component to transform and the transform data
@@ -348,6 +351,8 @@ function startRebalance(address[] memory _components, uint256[] memory _targetUn
 ```solidity
 function executeUntransform(address _transformComponent, bytes _untransformData) external onlyAllowedCaller {
 
+    _absorbAirdrops();
+
     uint256 unitsToUntransform = untransformUnits[_transformComponent];
     require(unitsToUntransform > 0 && untransforms > 0, "IPRebalanceExtension: nothing to untransform");
 
@@ -406,11 +411,21 @@ function setTradesComplete() external onlyOperator {
 }
 ```
 
+> trade(IERC20 _component, uint256 _ethQuantityLimit) external
+``` solidity
+function trade(IERC20 _component, uint256 _ethQuantityLimit) external onlyAllowedCaller {
+    _absorbAirdrops();
+    generalIndexModule.trade(setToken, _component, _ethQuantityLimit);
+}
+```
+
 > executeTransform(address _transformComponent, bytes _transformData) external
 ```solidity
 function executeTransform(address _transformComponent, bytes _transformData) external onlyAllowedCaller {
     require(tradesComplete, "IPRebalance: trades not complete");
     require(transforms > 0, "IPRebalanceExtension: nothing to transform");
+
+    _absorbAirdrops();
 
     uint256 unitsToTransform = transformUnits[_transformComponent];
     TransformInfo transformInfo = transformComponentsInfo[_transformComponent];
