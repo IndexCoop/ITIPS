@@ -48,41 +48,44 @@ Note: tokens with lockups will not be supported
 - Only requires one multisig transaction
 - Better abstraction
 - Actual wrapping and unwrapping action can be permissionless (similar to how `GeneralIndexModule` works)
+- Can generalize wrapped components and AMM deposit components as a general "transformed component" using helper contracts
 
-Since wrapped components all have an exchange rate, this system can be built by just specifying the target units of the underlying components. In order to fetch exchange rates, a helper contract of interface`IWrapOracle` can be added to have a `getExchangeRate` function. To handle cases where both an underlying component can correlate to two different wrapped components (such as a set that contains aUSDC and cUSDC), we must also specify the percentage of the target units that will be wrapped.
+Since transformed components all have an exchange rate, this system can be built by just specifying the target units of the underlying components. In order to fetch exchange rates, a helper contract of interface`ITransformHelper` can be added to have a `getExchangeRate` function. TransformHelper will also contain methods to inform the extension on how to interact with set protocol to transform/untransform components. To handle cases where both an underlying component can correlate to two different transformed components (such as a set that contains aUSDC and cUSDC), we must also specify the percentage of the target units that will be wrapped.
 
 Below is the outline for executing a rebalance through this process:
 
-1. Ensure the extension knows how to wrap and unwrap each component
-    - This would only need to be done when a new wrapped component is added. After that it will be saved between rebalances
-    - Stores the wrapped component, underlying component, and wrap adapter name
+1. Ensure the extension knows how to transform and untransform each component
+    - This would only need to be done when a new transform component is added. After that it will be saved between rebalances
+    - Stores the transform component, underlying component, and transform helper
 2. Parametrize the rebalance
-    - Pass in the target underlying units as well as the percentage of each underlying unit that should be rewrapped into each corresponding wrapped unit
-        - If a components target units are being set to 0, store MAX_UINT_256 as the amount to unwrap. This allows us to enforce that 100% of a token is being unwrapped in step 3 (which might otherwise not be the case if a token positively rebases between steps 2 and 3).
+    - Pass in the target underlying units as well as the percentage of each underlying unit that should be transformed into each corresponding transform unit
+        - If a components target units are being set to 0, store MAX_UINT_256 as the amount to unwrap. This allows us to enforce that 100% of a token is being untransformed in step 3 (which might otherwise not be the case if a token positively rebases between steps 2 and 3).
     - By using the exchange rates, we can calculate the approximate amount of underlying components that the set contains. From there, we can calculate how much of each wrapped component to unwrap. Need to call `AirdropModule` here to handle rebasing tokens.
-    - Using simple algebra, we can calculate the target units for the unwrapped components, and use that to parametrize the trading portion of the rebalance similar to how the `GIMExtension` works.
-    - When wrapping components after the trading portion has completed, we use a percentage based system to handle the cases where the final set contains two wrapped components with the same underlying. In sets where this is not the case, the operator will always provide 100% as the amount to wrap.
-3. Execute unwrap
-    - Call `executeUnwrap` on `IPRebalanceExtension`
-    - Goes through the list of components to unwrap calculated in the previous step and unwraps one per call
+    - Using simple algebra, we can calculate the target units for the untransformed components, and use that to parametrize the trading portion of the rebalance similar to how the `GIMExtension` works.
+    - When transforming components after the trading portion has completed, we use a percentage based system to handle the cases where the final set contains two transform components with the same underlying. In sets where this is not the case, the operator will always provide 100% as the amount to transform.
+3. Execute untransform
+    - Call `executeUntransform` on `IPRebalanceExtension`
+    - Takes in the transformed component to untransform as a parameter
+    - Takes in untransformData which can be fetched off-chain by calling getUntransformData on the transform helper for the component
     - Can be marked `onlyAllowedCaller`
 4. Execute trades
     - Call `startRebalance` on `IPRebalanceExtension`
         - does not require any parameters since everything has been parametrized in step 2
     - Perform trades through `GeneralIndexModule` exactly as they are done in a normal simple index rebalance
-5. Execute wrap
-    - Call `executeWrap` on `IPRebalanceExtension`
-    - Goes though the list of components to wrap and calculates the amount to rewrap using the percentages supplied in step 2.
+5. Execute transform
+    - Call `executeTransform` on `IPRebalanceExtension`
+    - Takes in the transformed component as a parameter
+    - Takes in transformData which can be fetched off-chain by calling getTransformData on the transform helper for the component
     - Can be marked `onlyAllowedCaller`
 
 Notes:
 - Logic for lossy wrapping/unwrapping
     - since rebalancing trades are lossy anyway, not receiving exactly the correct unwrapped units won't cause any major problems
-    - since we provide percentages to re-wrap rather than absolute amounts, we do not need to worry about not receiving an exact amount of wrapped units back
-    - in the case of tokens that should not be wrapped or unwrapped at certain times, we can add `shouldWrap` and `shouldUnwrap` functions to `IWrapOracle` that can prevent the execution of a suboptimal wrap or unwrap.
+    - since we provide percentages to transform rather than absolute amounts, we do not need to worry about not receiving an exact amount of transformed component units back
+    - in the case of tokens that should not be wrapped or unwrapped at certain times, we can add `shouldTransform` and `shouldUntransform` functions to `ITransformHelper` that can prevent the execution of a suboptimal wrap or unwrap.
 - Adding and removing components can be handled during steps 1 and 2.
     - Adding a new component
-        - Add the adapter to use in step 1
+        - Call setTransformData to add the transform data for the component
         - Perform step 2 as normally with the new component and the percentage to wrap in the component list
     - Removing a component
         - Set target units to 0 in step 2
@@ -90,10 +93,10 @@ Notes:
 Changes to rebalancing utilities:
 - Methodologists will provide percentage based weights.
 - Since the contract requires units be given in the underlying components, calculating units should be easy by fetching underlying component prices.
-- Additional logic is to handle the cases where the percentage to re-wrap is not 100%
+- Additional logic is to handle the cases where the percentage to transform is not 100%
     - Can be handled programmatically
     - Methodologist should specify the underlying units as well as what it is being wrapped into
-    - In the case where an underlying unit is being wrapped into multiple wrapped components (or only partially wrapped), calculate the correct re-wrap percentage to supply
+    - In the case where an underlying unit is being transformed into multiple transform components (or only partially transformed), calculate the correct transform percentage to supply
 
 #### Example 1: Rebalance between wrapped components
 |Start Component|Start Weight|End Component|End Weight|
@@ -241,38 +244,39 @@ TBD
 **Reviewer**:
 
 ## Proposed Architecture Changes
-Managers will rebalance intrinsically productive Sets through a new extension called `IPRebalanceExtension`. `IPRebalanceExtension` will makes calls to oracle contracts that adhere to a new `IWrapOracle` interface. This interface will contain `getExchangeRate`, `shouldWrap` and `shouldUnwrap` view functions which `IPRebalanceExtension` will consume. No changes will be required to the existing manager contracts or to Set Protocol contracts.
+Managers will rebalance intrinsically productive Sets through a new extension called `IPRebalanceExtension`. `IPRebalanceExtension` will makes calls to helper contracts that adhere to a new `ITransformHelper` interface. This interface will contain functions that inform the extension how properly to interact with Set Protocol to transform and untransform components. This interface will also have functions to get the exchange rate between underlying and transformed components. No changes will be required to the existing manager contracts or to Set Protocol contracts.
 
 <img src="../assets/ITIP-003/ip-diagram.jpg" width="50%" />
 
 ## Requirements
-- Calculating amounts to wrap and unwrap is abstracted away from operator.
-- Which wrap adapter and wrap oracle to use for a particular wrapped component is set only when the component is first added, and does not need to be inputted again.
+- Calculating amounts to transform and untransform is abstracted away from operator.
 - Operator only inputs weights denominated in underlying units.
 - Actual rebalance weight calculation abstracted away from operator.
-- Support Sets with multiple wrapped assets with the same underlying component.
-- Supports Sets that contain both a wrapped asset and its underlying component.
+- Support Sets with multiple transformed assets with the same underlying component.
+- Supports Sets that contain both a transformed asset and its underlying component.
+- Support transforming component using either WrapModuleV2 or AmmModule.
 
 ## User Flows
-### Operator wants to add a new wrapped component
-1. Deploy a new contract adhering to the `IWrapOracle` interface for the new component if one does not already exist.
-2. Deploy a new contract adhering to the `IWrapV2Adapter` and add it to the integration registry of Set Protocol.
-3. Call `setWrapInfo` on `IPRebalanceExtension` and pass in the address of the wrapped component, underlying component, and wrap oracle, and the name of the wrap adapter.
+### Operator wants to add a new transform component
+1. Deploy a new contract adhering to the `ITransformHelper` interface if one does not already exist.
+3. Call `seTransformInfo` on `IPRebalanceExtension` and pass in the address of the transformed component, underlying component, and transform helper.
 
-### Operator wants to update a components wrap info
-1. Call `setWrapInfo` on `IPRebalanceExtension` and pass in the address of the wrapped component, underlying component, and wrap oracle, and the name of the wrap adapter.
+### Operator wants to update a components transform info
+1. Call `seTransformInfo` on `IPRebalanceExtension` and pass in the address of the transformed component, underlying component, and transform helper.
 
 ### Operator wants to rebalance
-1. Check to ensure all wrapped components in both the pre and post rebalance state have an associated wrap info setting.
+1. Check to ensure all transformed components in both the pre and post rebalance state have an associated transform info setting.
 2. Set the trade maximums, exchanges, cooldown periods, exchange data, target percentage, trader status, and anyone trade status for the `GeneralIndexModule`
     - the interface for these actions will be identical to the same actions of `GIMExtension`
-3. Call `startRebalance` and pass in the components, units (denominated in the underlying component if applicable), and the wrap percentage (if applicable).
-4. Call `executeUnwrap` repeatedly until all wrapped component have been unwrapped.
-    - Use a helper `unwrapComplete` function to check whether to stop unwrapping
-5. On the last `executeUnwrap` call, the `GeneralIndexModule` will automatically be initialized. At this point it is safe to execute a rebalance as normally through the `GeneralIndexModule`
-6. Once rebalancing trades are complete call `setTradesComplete` to denote that we are ready to wrap components.
-7. Once the rebalancing trades are complete, call `executeWrap` repeatedly until all component have been wrapped
-    - Use a helper `wrapComplete` function to check whether to stop wrapping
+3. Call `startRebalance` and pass in the components, units (denominated in the underlying component if applicable), and the transform percentage (if applicable).
+4. Call `executeUntransform` for each transformed component that must be untransformed
+    - pass in the component to untransform and the untransform data
+    - untransform data can be fetched using the corresponding transform helper contract
+5. On the last `executeUntransform` call, the `GeneralIndexModule` will automatically be initialized. At this point it is safe to execute a rebalance as normally through the `GeneralIndexModule`
+6. Once rebalancing trades are complete call `setTradesComplete` to denote that we are ready to transform components.
+7. Once the rebalancing trades are complete, call `executeTransform` repeatedly until all component have been transformed
+    - pass in the component to transform and the transform data
+    - transform data can be fetched using the corresponding transform helper contract
 
 ## Checkpoint 2
 **Reviewer**:
@@ -364,6 +368,7 @@ function executeUntransform(address _transformComponent, bytes _untransformData)
     );
     interactManager(module, callData);
 
+    untransformUnits[_transformComponent] = 0;
     untransforms--;
 
     // if done untransforming begin the rebalance through GIM
@@ -425,6 +430,7 @@ function executeTransform(address _transformComponent, bytes _transformData) ext
     );
     interactManager(module, callData);
 
+    transformUnits[_transformComponent] = 0;
     transforms--;
 
     if (transforms == 0) {
