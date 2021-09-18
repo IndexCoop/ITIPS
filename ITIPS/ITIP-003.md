@@ -270,7 +270,8 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 4. Call `executeUnwrap` repeatedly until all wrapped component have been unwrapped.
     - Use a helper `unwrapComplete` function to check whether to stop unwrapping
 5. On the last `executeUnwrap` call, the `GeneralIndexModule` will automatically be initialized. At this point it is safe to execute a rebalance as normally through the `GeneralIndexModule`
-6. Once the rebalancing trades are complete, call `executeWrap` repeatedly until all component have been wrapped
+6. Once rebalancing trades are complete call `setTradesComplete` to denote that we are ready to wrap components.
+7. Once the rebalancing trades are complete, call `executeWrap` repeatedly until all component have been wrapped
     - Use a helper `wrapComplete` function to check whether to stop wrapping
 
 ## Checkpoint 2
@@ -281,70 +282,235 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 #### Inheritance
 - IBaseExtension
 #### Structs
-- WrapInfo  
+- TransformInfo  
 
 | Type 	| Name 	| Description 	|
 |------	|------	|-------------	|
 |IERC20|underlyingComponent|Instance of the wrapped component|
-|IWrapOracle|wrapOracle|Instance of the wrap oracle|
+|ITransformHelper|transformHelper|Instance of the transform helper|
 |string|wrapAdapter|Name of the WrapModuleV2 adapter|
 
 #### Public Variables
 | Type 	| Name 	| Description 	|
 |------	|------	|-------------	|
 |IGeneralIndexModule|generalIndexModule|Instance of the GeneralIndexModule|
-|IWrapModuleV2|wrapModule|Instance of the WrapModuleV2|
-|mapping(address => WrapInfo)|wrappedComponentsInfo|Mapping from wrapped component address to WrapInfo|
+|mapping(address => WrapInfo)|transformComponentsInfo|Mapping from transformed component address to WrapInfo|
 
 #### Functions
 Note: functions that appear in `GIMExtension` that will be replicated in `IPRebalanceExtension` will not be described below
 
-> setWrapInfo(address _wrappedComponent, WrapInfo _wrapInfo) external 
+> setWrapInfo(address _transformedComponent, TransformInfo _transformInfo) external 
 ```solidity
-function setWrapInfo(WrapInfo _wrapInfo) external {
-    wrappedComponentsInfo[_wrappedComponent] = _wrapInfo;
+function setTransformInfo(address _transformedComponent, TransformInfo _transformInfo) external onlyOperator {
+    transformComponentsInfo[_transformedComponent] = _transformInfo;
 }
 ```
 
-> startRebalance(address[] calldata _components, uint256[] calldata _targetUnits, uint256[] calldata _wrapPercentages) external
+> startRebalance(address[] memory _components, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external
 ```solidity
-function startRebalance(address[] calldata _components, uint256[] calldata _targetUnits, uint256[] calldata _wrapPercentages) external {
-    _validateRebalanceParams(_components, _targetUnits, _wrapPercentages);
-    _beginUnwrap(_component, _targetUnits, _wrapPercentages);
+function startRebalance(address[] memory _components, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external onlyOperator {
+
+    require(_components.length == _targetUnitsUnderlying.length, "IPRebalanceExtension: length mismatch");
+    require(_components.length == _transformPercentages.length, "IPRebalanceExtension: length mismatch");
+
+    for (uint256 i = 0; i < _component.length; i++) {
+        if (_isTransformComponent(_components[i])) {
+
+            uint256 currentUnits = _getCurrentUnits(_components[i]);
+
+            // convert target units from underlying to wrapped amounts
+            TransformInfo transformInfo = transformComponentsInfo[_components[i]];
+            uint256 exchangeRate = transformInfo.transformHelper.getExchangeRate(underlyingComponent, _components[i]);
+            uint256 targetUnitsInTransformed = _targetUnitsUnderlying[i].mul(exchangeRate);
+
+            uint256 unitsToUntransform = currentUnits > targetUnitsInTransformed[i] ? currentUnits.sub(targetUnitsInTransformed) : 0;
+
+            if (unitsToUntransform > 0) {
+                untransforms++;
+                untransformUnits[_components[i]] = unitsToUntransform;
+            }
+        }
+    }
+
+    // saves rebalance parameters for later use to start rebalance through GIM when untransforming is complete
+    _saveRebalanceParams(_components, _targetUnitsUnderlying, _transformPercentages);
+
+    // for each transform's underlying, save the current amount of the underlying in the Set
+    // this is usually zero unless a set contains both a transformed and underlying component
+    _saveStartingUnderlying(_components);
 }
 ```
 
-> executeUnwrap(address _wrappedComponent) external
+> executeUntransform(address _transformComponent, bytes _untransformData) external
 ```solidity
-function executeUnwrap(address _wrappedComponent) external {
-    require(!_isUnwrapComplete(), "IPRebalanceExtension: unwrap complete");
+function executeUntransform(address _transformComponent, bytes _untransformData) external onlyAllowedCaller {
 
-    uint256 unwrapUnits = _getUnwrapAmount(_wrappedComponent);
-    WrapInfo wrapInfo = wrappedComponentsInfo[wrappedComponent];
+    uint256 unitsToUntransform = untransformUnits[_transformComponent];
+    require(unitsToUntransform > 0 && untransforms > 0, "IPRebalanceExtension: nothing to untransform");
 
-    require(wrapInfo.wrapOracle.shouldUnwrap(), "IPRebalanceExtension: unwrap unavailable");
+    TransformInfo transformInfo = transformComponentsInfo[_transformComponent];
 
-    _unwrapComponent(_wrappedComponent, wrapInfo, unwrapUnits);
+    require(
+        transformInfo.transformHelper.shouldUntransform(transformInfo.underlyingComponent, _transformComponent),
+        "IPRebalanceExtension: untransform unavailable"
+    );
 
-    if (_isLastUnwrap()) {
+    // untransform component
+    (address module, bytes callData) = transformInfo.transformHelper.getUntransformCall(
+        setToken,
+        transformInfo.underlyingComponent,
+        _transformComponent,
+        _untransformData,
+        unitsToUntransform
+    );
+    interactManager(module, callData);
+
+    untransforms--;
+
+    // if done untransforming begin the rebalance through GIM
+    if (untransforms == 0) {
         _startGIMRebalance();
     }
 }
 ```
 
-> executeUnwrap(address _wrappedComponent) external
+> setTradesComplete() external
 ```solidity
-function executeWrap(address _wrappedComponent) external {
-    require(!_isWrapComplete(), "IPRebalanceExtension: wrap complete");
+function setTradesComplete() external onlyOperator {
+    tradesComplete = true;
 
-    uint256 wrapUnits = _getWrapAmount(_wrappedComponent);
-    WrapInfo wrapInfo = wrappedComponentsInfo[wrappedComponent];
+    (address memory[] components, targetUnits, transformPercentages) = _getSavedRebalanceParams();
+    for (uint256 i = 0; i < components.length; i++) {
 
-    require(wrapInfo.wrapOracle.shouldWrap(), "IPRebalanceExtension: wrap unavailable");
+        if (_isTransformComponent(component[i])) {
 
-    _wrapComponent(_wrappedComponent, wrapInfo, wrapUnits);
+            uint256 currentUnits = _getCurrentUnits(components[i]);
+
+            uint256 startingUnderlying = _getSavedStartingUnderlyingUnits(components[i]);
+
+            // fetches sum of all underlying units in set (including those in currently transformed positions)
+            unit256 totalUnderlyingUnits = _getTotalUnderlyingUnitsInSet();
+
+            uint256 unitsToTransform = transformPercentages[i].mul(totalUnderlyingUnits).sub(startingUnderlying);
+
+            if (unitsToTransform > 0) {
+                transforms++;
+                transformUnits[components[i]] = unitsToTransform;
+            }
+        }
+    }
 }
 ```
+
+> executeTransform(address _transformComponent, bytes _transformData) external
+```solidity
+function executeTransform(address _transformComponent, bytes _transformData) external onlyAllowedCaller {
+    require(tradesComplete, "IPRebalance: trades not complete");
+    require(transforms > 0, "IPRebalanceExtension: nothing to transform");
+
+    uint256 unitsToTransform = transformUnits[_transformComponent];
+    TransformInfo transformInfo = transformComponentsInfo[_transformComponent];
+
+    require(
+        transformInfo.transformHelper.shouldTransform(transformInfo.underlyingComponent, _transformComponent),
+        "IPRebalanceExtension: transform unavailable"
+    );
+
+    // transform component
+    (address module, bytes callData) = transformInfo.transformHelper.getTransformCall(
+        setToken,
+        transformInfo.underlyingComponent,
+        _transformComponent,
+        _transformData,
+        unitsToTransform
+    );
+    interactManager(module, callData);
+
+    transforms--;
+
+    if (transforms == 0) {
+        tradesComplete = false;
+    }
+}
+```
+
+> _startGIMRebalance() internal
+```solidity
+function _startGIMRebalance() internal {
+
+    (address memory[] components, targetUnits, transformPercentages) = _getSavedRebalanceParams();
+    
+    uint256[] memory rebalanceTargets = new uint256[](components.length);
+
+    for (uint256 i = 0; i < components.length; i++) {
+        if (_isTransformComponent(components[i])) {
+            uint256 units = _getCurrentUnits(components[i]);
+            rebalanceTargets[i] = units;
+        } else {
+            TransformInfo transformInfo = transformComponentsInfo[_components[i]];
+            uint256 exchangeRate = transformInfo.transformHelper.getExchangeRate(underlyingComponent, _components[i]);
+
+            // get the sum underlying units (including those that are locked in transformed components) in the final Set's composition
+            uint256 finalUnderlyingUnits = _getFinalUnderlyingUnits(transformInfo.underlying, components, targetUnits);
+
+            uint256 startingUnderlying = _getSavedStartingUnderlyingUnits(components[i]);
+
+            uint256 a = PreciseUnitMath.PRECISE_UNIT.preciseDiv(exchangeRate).mul(finalUnderlyingUnits)
+            if (a > startingUnderlying) {
+                rebalanceTargets[i] = a.sub(startingUnderlying);
+            } else {
+                rebalanceTargets[i] = 0;
+            }
+        }
+    }
+
+    (
+        address[] memory newComponents,
+        uint256[] memory newComponentsTargetUnits,
+        uint256[] memory oldComponentsTargetUnits
+    ) = _sortNewAndOldComponents(components, rebalanceTargets);
+
+    bytes memory callData = abi.encodeWithSelector(
+        IGeneralIndexModule.startRebalance.selector,
+        setToken,
+        _newComponents,
+        _newComponentsTargetUnits,
+        _oldComponentsTargetUnits,
+        _positionMultiplier
+    );
+
+    invokeManager(generalIndexModule, callData);
+}
+```
+
+### ITransformHelper
+#### Functions
+> getExchangeRate(address _underlyingComponent, address _transformedComponent) external view
+- returns the exchange rate for converting 1 unit of _underlyingComponent into _transformedComponent
+
+> getTransformData(address setToken, address _underlyingComponent, address _transformedComponent, uint256 _units) external view returns (bytes transformData)
+- returns the _transformData parameter supplied to the `executeTransform` function of `IPRebalanceExtension
+- usually this data will encode some sort of slippage info for AmmModule deposits and withdrawals
+- should only be called off-chain to avoid sandwich attacks
+
+> getUntransformData(address setToken, address _underlyingComponent, address _transformedComponent, uint256 _units) external view returns (bytes transformData)
+- returns the _untransformData parameter supplied to the `executeUntransform` function of `IPRebalanceExtension
+- usually this data will encode some sort of slippage info for AmmModule deposits and withdrawals
+- should only be called off-chain to avoid sandwich attacks
+
+> getTransformCall(address _underlyingComponent, address _transformedComponent, bytes _transformData, uint256 _units) external view (address module, bytes callData)
+- used by `IPRebalanceExtension` to call the required module for transformations and calldata
+
+> getUntransformCall(address _underlyingComponent, address _transformedComponent, bytes _untransformData, uint256 _units) external view (address module, bytes callData)
+- used by `IPRebalanceExtension` to call the required module for transformations and calldata
+
+> shouldTransform(address _underlyingComponent, address _transformedComponent) external view
+- returns whether it is safe to transform or not
+- some protocols give unfavorable exchange rates during certain times
+
+> shouldUntransform(address _underlyingComponent, address _transformedComponent) external view
+- returns whether it is safe to transform or not
+- some protocols give unfavorable exchange rates during certain times
 
 ## Checkpoint 3
 **Reviewer**:
