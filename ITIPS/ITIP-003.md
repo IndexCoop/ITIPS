@@ -69,9 +69,7 @@ Below is the outline for executing a rebalance through this process:
     - Takes in untransformData which can be fetched off-chain by calling getUntransformData on the transform helper for the component
     - Can be marked `onlyAllowedCaller`
 4. Execute trades
-    - Call `startRebalance` on `IPRebalanceExtension`
-        - does not require any parameters since everything has been parametrized in step 2
-    - Perform trades through `GeneralIndexModule` exactly as they are done in a normal simple index rebalance
+    - Perform trades through `IPRebalanceExtension`. It will have a similar interface as the `trade` function of `GeneralIndexModule` but will absorb rebase token components before forwarding the trade call to `GeneralIndexModule`
 5. Execute transform
     - Call `executeTransform` on `IPRebalanceExtension`
     - Takes in the transformed component as a parameter
