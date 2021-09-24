@@ -255,29 +255,56 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 - Support transforming component using either WrapModuleV2 or AmmModule.
 
 ## User Flows
-### Operator wants to add a new transform component
-1. Deploy a new contract adhering to the `ITransformHelper` interface if one does not already exist.
-3. Call `seTransformInfo` on `IPRebalanceExtension` and pass in the address of the transformed component, underlying component, and transform helper.
+### setTransformInfo
+<img src="../assets/ITIP-003/genericInteraction.jpg" width="50%" />
 
-### Operator wants to update a components transform info
-1. Call `seTransformInfo` on `IPRebalanceExtension` and pass in the address of the transformed component, underlying component, and transform helper.
+1. Operator calls `setTransformInfo` on `IPRebalanceExtension` and pass in the address of the transformed component, underlying component, and transform helper.
 
-### Operator wants to rebalance
-1. Check to ensure all transformed components in both the pre and post rebalance state have an associated transform info setting.
-2. Set the trade maximums, exchanges, cooldown periods, exchange data, target percentage, trader status, and anyone trade status for the `GeneralIndexModule`
-    - the interface for these actions will be identical to the same actions of `GIMExtension`
-3. Call `startRebalance` and pass in the components, units (denominated in the underlying component if applicable), and the transform percentage (if applicable).
-4. Call `executeUntransform` for each transformed component that must be untransformed
-    - pass in the component to untransform and the untransform data
-    - untransform data can be fetched using the corresponding transform helper contract
-5. Execute trades
-    - On the last `executeUntransform` call, the `GeneralIndexModule` will automatically be initialized
-    - Since some of the components in the set may rebase, trades need to be executed through a dedicated `trade` function on `IPRebalanceExtension` which absorbs all rebase components and then forwards the trade to `GeneralIndexModule`
-    - To make this work, `IPRebalanceExtension` must be set as an allowed caller in `GeneralIndexModule`
-6. Once rebalancing trades are complete call `setTradesComplete` to denote that we are ready to transform components.
-7. Once the rebalancing trades are complete, call `executeTransform` repeatedly until all component have been transformed
-    - pass in the component to transform and the transform data
-    - transform data can be fetched using the corresponding transform helper contract
+### updateTransformInfo
+<img src="../assets/ITIP-003/genericInteraction.jpg" width="50%" />
+
+1. Call `updateTransformInfo` on `IPRebalanceExtension` and pass in the address of the transformed component, underlying component, and transform helper.
+
+### startIPRebalance
+<img src="../assets/ITIP-003/startRebalance.jpg" width="50%" />
+
+1. Operator calls `startIPRebalance` and passes in components, underlying units, and transform percentages.
+2. `IPRebalanceExtension` saves the rebalance parameters and the units of the raw underlying components (if there are any)
+3. If it is a transform component, fetch the exchange rate from the applicable `TransformHelper` using the `getExchangeRate` function.
+4. Using the targets, calculate the amounts to untransform (if applicable) and save result in untransformUnits.
+
+### executeUntransform
+<img src="../assets/ITIP-003/executeUntransform.jpg" width="50%" />
+
+1. Allowed caller calls `executeUntransform` on `IPRebalanceExtension` and passes in the component to untransform and the untransformData
+    - untransformData can be fetched by calling getUntransformData on the `TransformHelper`
+    - call must be done off-chain since this data may encode details such as minOutput amounts
+2. `IPRebalanceExtension` fetches calldata for interacting with the `AmmModule` or `WrapModuleV2` by calling `getUntransformCall` on the relevant `TransformHelper`.
+3. `IPRebalanceExtension` calls `interactManager` on `BaseManagerV2` and passes the appropriate module and calldata fetched in the prior step to execute the untransform
+4. If all components have been untransformed, start a rebalance with the `GeneralIndexModule`. This is done by calculating the appropriate units and calling `interactManager` with the appropriate caller and calldata for starting a rebalance.
+
+### Trade
+<img src="../assets/ITIP-003/trade.jpg" width="50%" />
+
+1. Allowed caller calls `trade` on `IPRebalanceExtension`
+2. `IPRebalanceExtension` syncs rebasing components by calling `interactManager` with the caller and calldata for an `AirdropModule` `batchAbsorb`.
+3. `IPRebalanceExtension` executes trade by calling `interactManager` with the caller and calldata for a `GeneralIndexModule` `trade`.
+
+### setTradesComplete
+<img src="../assets/ITIP-003/genericInteraction.jpg" width="50%" />
+
+1. Operator calls `setTradesComplete` on `IPRebalanceExtension`
+    - tradesComplete state variable set to true
+    - amounts to transform is calculate and saved for each component in transformUnits
+
+### executeTransform
+<img src="../assets/ITIP-003/executeTransform.jpg" width="50%" />
+
+1. Allowed caller calls `executeTransform` on `IPRebalanceExtension` and passes in the component to transform and the transformData
+    - transformData can be fetched by calling getTransformData on the `TransformHelper`
+    - call must be done off-chain since this data may encode details such as minOutput amounts
+2. `IPRebalanceExtension` fetches calldata for interacting with the `AmmModule` or `WrapModuleV2` by calling `getTransformCall` on the relevant `TransformHelper`.
+3. `IPRebalanceExtension` calls `interactManager` on `BaseManagerV2` and passes the appropriate module and calldata fetched in the prior step to execute the transform
 
 ## Checkpoint 2
 **Reviewer**:
@@ -309,9 +336,12 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 |mapping(address => TransformInfo)|transformComponentsInfo|Mapping from transformed component address to TransformInfo|
 |uint256|untransforms|number of untransform operations left|
 |uint256|transforms|number of transform operations left|
+|mapping(address => uint256)|untransformUnits|the amount to untransform before rebalancing for each component|
+|mapping(address => unit256)|transformUnits|the amount to transform after rebalance for each component|
 |mapping(address => rebalanceParams)|rebalanceParams|rebalance parameters from startIPRebalance|
 |address[]|componentList|list of components involved in rebalance|
 |mapping(address => uint256|startingUnderlyingComponentUnits|units from raw underlying in the set at rebalance start|
+|bool|tradesComplete|whether the GIM trades are complete|
 
 #### Functions
 Note: functions that appear in `GIMExtension` that will be replicated in `IPRebalanceExtension` will not be described below
