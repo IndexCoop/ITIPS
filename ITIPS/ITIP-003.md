@@ -319,6 +319,15 @@ Note: functions that appear in `GIMExtension` that will be replicated in `IPReba
 > setTransformInfo(address _transformedComponent, TransformInfo _transformInfo) external 
 ```solidity
 function setTransformInfo(address _transformedComponent, TransformInfo _transformInfo) external onlyOperator {
+    require(transformComponentsInfo[_transformedComponent].underlyingComponent == address(0), "TransformInfo already set");
+    transformComponentsInfo[_transformedComponent] = _transformInfo;
+}
+```
+
+> updateTransformInfo(address _transformedComponent, TransformInfo _transformInfo) external 
+```solidity
+function updateTransformInfo(address _transformedComponent, TransformInfo _transformInfo) external onlyOperator {
+    require(transformComponentsInfo[_transformedComponent].underlyingComponent != address(0), "TransformInfo not set yet");
     transformComponentsInfo[_transformedComponent] = _transformInfo;
 }
 ```
