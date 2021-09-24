@@ -285,7 +285,7 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 ## Specification
 ### IPRebalanceExtension
 #### Inheritance
-- IBaseExtension
+- GIMExtension
 #### Structs
 - TransformInfo  
 
@@ -294,11 +294,24 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 |address|underlyingComponent|address of the underlying component|
 |ITransformHelper|transformHelper|Instance of a transform helper|
 
+- RebalanceParams  
+
+| Type 	| Name 	| Description 	|
+|------	|------	|-------------	|
+|uint256|targetUnderlyingUnits|target rebalance units measured in underlying component amounts|
+|uint256|transformPercentages|percentage of total underlying that will be transformed into the component|
+
+
 #### Public Variables
 | Type 	| Name 	| Description 	|
 |------	|------	|-------------	|
 |IGeneralIndexModule|generalIndexModule|Instance of the GeneralIndexModule|
 |mapping(address => TransformInfo)|transformComponentsInfo|Mapping from transformed component address to TransformInfo|
+|uint256|untransforms|number of untransform operations left|
+|uint256|transforms|number of transform operations left|
+|mapping(address => rebalanceParams)|rebalanceParams|rebalance parameters from startIPRebalance|
+|address[]|componentList|list of components involved in rebalance|
+|mapping(address => uint256|startingUnderlyingComponentUnits|units from raw underlying in the set at rebalance start|
 
 #### Functions
 Note: functions that appear in `GIMExtension` that will be replicated in `IPRebalanceExtension` will not be described below
@@ -310,9 +323,16 @@ function setTransformInfo(address _transformedComponent, TransformInfo _transfor
 }
 ```
 
-> startRebalance(address[] memory _components, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external
+> startRebalance(address[] memory _components uint256[] memory _targetUnitsUnderlying) external
 ```solidity
-function startRebalance(address[] memory _components, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external onlyOperator {
+function startRebalance(address[] memory _components uint256[] memory _targetUnitsUnderlying) external {
+    revert("IPRebalanceExtension: use startIPRebalance instead");
+}
+```
+
+> startIPRebalance(address[] memory _components, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external
+```solidity
+function startIPRebalance(address[] memory _components, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external onlyOperator {
 
     require(_components.length == _targetUnitsUnderlying.length, "IPRebalanceExtension: length mismatch");
     require(_components.length == _transformPercentages.length, "IPRebalanceExtension: length mismatch");
@@ -334,14 +354,18 @@ function startRebalance(address[] memory _components, uint256[] memory _targetUn
                 untransformUnits[_components[i]] = unitsToUntransform;
             }
         }
+
+        // for each transform's underlying, save the current amount of the underlying in the Set
+        // this is usually zero unless a set contains both a transformed and underlying component
+        address underlying = transformComponentsInfo[_components[i]].underlying;
+        startingUnderlyingComponentUnits[i] = _getComponentUnits(underlying)
+
+        // saves rebalance parameters for later use to start rebalance through GIM when untransforming is complete
+        rebalanceParams[_components[i]].targetUnitsUnderlying = _targetUnitsUnderlying[i];
+        rebalanceParams.transformPercentages = _transformPercentages[i];
     }
 
-    // saves rebalance parameters for later use to start rebalance through GIM when untransforming is complete
-    _saveRebalanceParams(_components, _targetUnitsUnderlying, _transformPercentages);
-
-    // for each transform's underlying, save the current amount of the underlying in the Set
-    // this is usually zero unless a set contains both a transformed and underlying component
-    _saveStartingUnderlying(_components);
+    componentList = _components;
 }
 ```
 
@@ -386,23 +410,23 @@ function executeUntransform(address _transformComponent, bytes _untransformData)
 function setTradesComplete() external onlyOperator {
     tradesComplete = true;
 
-    (address memory[] components, targetUnits, transformPercentages) = _getSavedRebalanceParams();
-    for (uint256 i = 0; i < components.length; i++) {
+    for (uint256 i = 0; i < componentList.length; i++) {
 
-        if (_isTransformComponent(component[i])) {
+        if (_isTransformComponent(componentList[i])) {
 
-            uint256 currentUnits = _getCurrentUnits(components[i]);
+            uint256 currentUnits = _getCurrentUnits(componentList[i]);
 
-            uint256 startingUnderlying = _getSavedStartingUnderlyingUnits(components[i]);
+            // fetches starting underlying from savedUnderlingComponent
+            uint256 startingUnderlying = startingUnderlyingComponentUnits[componentList[i]];
 
             // fetches sum of all underlying units in set (including those in currently transformed positions)
             unit256 totalUnderlyingUnits = _getTotalUnderlyingUnitsInSet();
 
-            uint256 unitsToTransform = transformPercentages[i].mul(totalUnderlyingUnits).sub(startingUnderlying);
+            uint256 unitsToTransform = rebalanceParams[componentList[i]].transformPercentages.mul(totalUnderlyingUnits).sub(startingUnderlying);
 
             if (unitsToTransform > 0) {
                 transforms++;
-                transformUnits[components[i]] = unitsToTransform;
+                transformUnits[componentList[i]] = unitsToTransform;
             }
         }
     }
@@ -455,22 +479,20 @@ function executeTransform(address _transformComponent, bytes _transformData) ext
 > _startGIMRebalance() internal
 ```solidity
 function _startGIMRebalance() internal {
-
-    (address memory[] components, targetUnits, transformPercentages) = _getSavedRebalanceParams();
     
-    uint256[] memory rebalanceTargets = new uint256[](components.length);
+    uint256[] memory rebalanceTargets = new uint256[](componentList.length);
 
-    for (uint256 i = 0; i < components.length; i++) {
-        if (_isTransformComponent(components[i])) {
-            rebalanceTargets[i] = _getCurrentUnits(components[i]);
+    for (uint256 i = 0; i < componentList.length; i++) {
+        if (_isTransformComponent(componentsList[i])) {
+            rebalanceTargets[i] = _getCurrentUnits(componentList[i]);
         } else {
-            TransformInfo transformInfo = transformComponentsInfo[_components[i]];
-            uint256 exchangeRate = transformInfo.transformHelper.getExchangeRate(underlyingComponent, _components[i]);
+            TransformInfo transformInfo = transformComponentsInfo[componentList[i]];
+            uint256 exchangeRate = transformInfo.transformHelper.getExchangeRate(underlyingComponent, componentsList[i]);
 
             // get the sum underlying units (including those that are locked in transformed components) in the final Set's composition
-            uint256 finalUnderlyingUnits = _getFinalUnderlyingUnits(transformInfo.underlying, components, targetUnits);
+            uint256 finalUnderlyingUnits = _getFinalUnderlyingUnits(transformInfo.underlying, componentList, rebalanceParams[componentList[i]]);
 
-            uint256 startingUnderlying = _getSavedStartingUnderlyingUnits(components[i]);
+            uint256 startingUnderlying = startingUnderlyingComponentUnits[componentList[i]];
 
             uint256 a = PreciseUnitMath.PRECISE_UNIT.preciseDiv(exchangeRate).mul(finalUnderlyingUnits)
             if (a > startingUnderlying) {
