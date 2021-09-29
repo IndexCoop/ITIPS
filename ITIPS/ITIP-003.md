@@ -377,16 +377,14 @@ function startRebalanceWithUnits(address[] memory _components uint256[] memory _
 }
 ```
 
-> startIPRebalance(address[] memory _setComponents, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external
+> startIPRebalance(address[] memory _setComponents, uint256[] memory _targetUnitsUnderlying) external
 - _setComponents: components of the Set (can be a wrapped or raw component)
 - _targetUnitsUnderlying: target units after rebalance, measured as the equivalent amount its underlying (normal units if it is a raw component)
-- _transformPercentages: the percentage of the total underlying units that should be transformed into this component at end of rebalance (0 if it is a raw component)
 
 ```solidity
-function startIPRebalance(address[] memory _setComponents, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external onlyOperator {
+function startIPRebalance(address[] memory _setComponents, uint256[] memory _targetUnitsUnderlying) external onlyOperator {
 
     require(_setComponents.length == _targetUnitsUnderlying.length, "IPRebalanceExtension: length mismatch");
-    require(_setComponents.length == _transformPercentages.length, "IPRebalanceExtension: length mismatch");
 
     for (uint256 i = 0; i < _component.length; i++) {
         if (_isTransformComponent(_setComponents[i])) {
@@ -414,7 +412,11 @@ function startIPRebalance(address[] memory _setComponents, uint256[] memory _tar
 
         // saves rebalance parameters for later use to start rebalance through GIM when untransforming is complete
         rebalanceParams[_setComponents[i]].targetUnitsUnderlying = _targetUnitsUnderlying[i];
-        rebalanceParams.transformPercentages = _transformPercentages[i];
+
+        // saves the percentage of the total underlying units that should be transformed into this component at end of rebalance
+        // this value can be calculates by taking _targetUnitsUnderlying and dividing it by the sum of all underlying and raw components units
+        // that are the same token as the underlying of this transform component.
+        rebalanceParams.transformPercentages = _calculateTransformPercentage(_setComponents[i], _setComponents, _targetUnitsUnderlying);
     }
 
     setComponentList = _setComponents;
