@@ -241,6 +241,12 @@ TBD
 ## Checkpoint 1
 **Reviewer**:
 
+## Naming Conventions
+- Transform Component: A component that has undergone some form of transformation. These are usually wrapped tokens or LP tokens.
+- Underlying Component: The token that is the underlying of the transform component.
+- Raw Component: A normal token component in the Set (will be present in the final Set Token components without any transformations).
+- Set Component: Any component in a Set. Can be either a transform or raw component.
+
 ## Proposed Architecture Changes
 Managers will rebalance intrinsically productive Sets through a new extension called `IPRebalanceExtension`. `IPRebalanceExtension` will makes calls to helper contracts that adhere to a new `ITransformHelper` interface. This interface will contain functions that inform the extension how properly to interact with Set Protocol to transform and untransform components. This interface will also have functions to get the exchange rate between underlying and transformed components. No changes will be required to the existing manager contracts or to Set Protocol contracts.
 
@@ -268,39 +274,41 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 ### startIPRebalance
 <img src="../assets/ITIP-003/startRebalance.jpg" width="50%" />
 
-1. Operator calls `startIPRebalance` and passes in components, underlying units, and transform percentages.
-2. `IPRebalanceExtension` saves the rebalance parameters and the units of the raw underlying components (if there are any)
+1. Operator calls `startIPRebalance` and passes in set components, underlying units, and transform percentages.
+2. `IPRebalanceExtension` saves the rebalance parameters (set components, target units, and transform percentages) and the units of any raw components thats match up with a transform component's underlying component
 3. If it is a transform component, fetch the exchange rate from the applicable `TransformHelper` using the `getExchangeRate` function.
 4. Using the targets, calculate the amounts to untransform (if applicable) and save result in untransformUnits.
 
 ### executeUntransform
 <img src="../assets/ITIP-003/executeUntransform.jpg" width="50%" />
 
-1. Allowed caller calls `executeUntransform` on `IPRebalanceExtension` and passes in the component to untransform and the untransformData
+1. Allowed caller calls `executeUntransform` on `IPRebalanceExtension` and passes in the transform component to untransform and the untransformData
     - untransformData can be fetched by calling getUntransformData on the `TransformHelper`
     - call must be done off-chain since this data may encode details such as minOutput amounts
 2. `IPRebalanceExtension` fetches calldata for interacting with the `AmmModule` or `WrapModuleV2` by calling `getUntransformCall` on the relevant `TransformHelper`.
 3. `IPRebalanceExtension` calls `interactManager` on `BaseManagerV2` and passes the appropriate module and calldata fetched in the prior step to execute the untransform
-4. If all components have been untransformed, start a rebalance with the `GeneralIndexModule`. This is done by calculating the appropriate units and calling `interactManager` with the appropriate caller and calldata for starting a rebalance.
+4. If all transform components that need to be reduced have been untransformed, start a rebalance with the `GeneralIndexModule`. This is done by calculating the appropriate units and calling `interactManager` with the appropriate caller and calldata for starting a rebalance.
 
 ### Trade
 <img src="../assets/ITIP-003/trade.jpg" width="50%" />
 
 1. Allowed caller calls `trade` on `IPRebalanceExtension`
-2. `IPRebalanceExtension` syncs rebasing components by calling `interactManager` with the caller and calldata for an `AirdropModule` `batchAbsorb`.
-3. `IPRebalanceExtension` executes trade by calling `interactManager` with the caller and calldata for a `GeneralIndexModule` `trade`.
+2. `IPRebalanceExtension` performs validations
+    - Checks that the component passed in is an underlying component rather than a transformed component
+    - Checks that tradesComplete flag is false
+3. `IPRebalanceExtension` executes trade by calling `trade` on `GeneralIndexModule`.
 
 ### setTradesComplete
 <img src="../assets/ITIP-003/genericInteraction.jpg" width="50%" />
 
 1. Operator calls `setTradesComplete` on `IPRebalanceExtension`
     - tradesComplete state variable set to true
-    - amounts to transform is calculate and saved for each component in transformUnits
+    - amounts to transform is calculated and saved for each transform component in transformUnits
 
 ### executeTransform
 <img src="../assets/ITIP-003/executeTransform.jpg" width="50%" />
 
-1. Allowed caller calls `executeTransform` on `IPRebalanceExtension` and passes in the component to transform and the transformData
+1. Allowed caller calls `executeTransform` on `IPRebalanceExtension` and passes in the transform component and the transformData
     - transformData can be fetched by calling getTransformData on the `TransformHelper`
     - call must be done off-chain since this data may encode details such as minOutput amounts
 2. `IPRebalanceExtension` fetches calldata for interacting with the `AmmModule` or `WrapModuleV2` by calling `getTransformCall` on the relevant `TransformHelper`.
@@ -336,11 +344,11 @@ Managers will rebalance intrinsically productive Sets through a new extension ca
 |mapping(address => TransformInfo)|transformComponentsInfo|Mapping from transformed component address to TransformInfo|
 |uint256|untransforms|number of untransform operations left|
 |uint256|transforms|number of transform operations left|
-|mapping(address => uint256)|untransformUnits|the amount to untransform before rebalancing for each component|
-|mapping(address => unit256)|transformUnits|the amount to transform after rebalance for each component|
-|mapping(address => rebalanceParams)|rebalanceParams|rebalance parameters from startIPRebalance|
-|address[]|componentList|list of components involved in rebalance|
-|mapping(address => uint256|startingUnderlyingComponentUnits|units from raw underlying in the set at rebalance start|
+|mapping(address => uint256)|untransformUnits|mapping from address of the transform component to the amount to untransform|
+|mapping(address => unit256)|transformUnits|mapping from address of the transform component to the amount to transform after rebalance|
+|mapping(address => RebalanceParams)|rebalanceParams|mapping from set component to rebalance parameters from startIPRebalance|
+|address[]|setComponentList|list of components involved in rebalance|
+|mapping(address => uint256|startingUnderlyingComponentUnits|units from raw components that correlate with an underlying component in the set at rebalance start|
 |bool|tradesComplete|whether the GIM trades are complete|
 
 #### Functions
@@ -362,49 +370,54 @@ function updateTransformInfo(address _transformedComponent, TransformInfo _trans
 }
 ```
 
-> startRebalance(address[] memory _components uint256[] memory _targetUnitsUnderlying) external
+> startRebalanceWithUnits(address[] memory _components uint256[] memory _targetUnitsUnderlying) external
 ```solidity
-function startRebalance(address[] memory _components uint256[] memory _targetUnitsUnderlying) external {
+function startRebalanceWithUnits(address[] memory _components uint256[] memory _targetUnitsUnderlying) external {
     revert("IPRebalanceExtension: use startIPRebalance instead");
 }
 ```
 
-> startIPRebalance(address[] memory _components, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external
-```solidity
-function startIPRebalance(address[] memory _components, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external onlyOperator {
+> startIPRebalance(address[] memory _setComponents, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external
+- _setComponents: components of the Set (can be a wrapped or raw component)
+- _targetUnitsUnderlying: target units after rebalance, measured as the equivalent amount its underlying (normal units if it is a raw component)
+- _transformPercentages: the percentage of the total underlying units that should be transformed into this component at end of rebalance (0 if it is a raw component)
 
-    require(_components.length == _targetUnitsUnderlying.length, "IPRebalanceExtension: length mismatch");
-    require(_components.length == _transformPercentages.length, "IPRebalanceExtension: length mismatch");
+```solidity
+function startIPRebalance(address[] memory _setComponents, uint256[] memory _targetUnitsUnderlying, uint256[] memory _transformPercentages) external onlyOperator {
+
+    require(_setComponents.length == _targetUnitsUnderlying.length, "IPRebalanceExtension: length mismatch");
+    require(_setComponents.length == _transformPercentages.length, "IPRebalanceExtension: length mismatch");
 
     for (uint256 i = 0; i < _component.length; i++) {
-        if (_isTransformComponent(_components[i])) {
+        if (_isTransformComponent(_setComponents[i])) {
 
-            uint256 currentUnits = _getCurrentUnits(_components[i]);
+            uint256 currentUnits = _getCurrentUnits(_setComponents[i]);
 
             // convert target units from underlying to transformed amounts
-            TransformInfo transformInfo = transformComponentsInfo[_components[i]];
-            uint256 exchangeRate = transformInfo.transformHelper.getExchangeRate(underlyingComponent, _components[i]);
+            TransformInfo transformInfo = transformComponentsInfo[_setComponents[i]];
+            uint256 exchangeRate = transformInfo.transformHelper.getExchangeRate(underlyingComponent, _setComponents[i]);
             uint256 targetUnitsInTransformed = _targetUnitsUnderlying[i].mul(exchangeRate);
 
             uint256 unitsToUntransform = currentUnits > targetUnitsInTransformed[i] ? currentUnits.sub(targetUnitsInTransformed) : 0;
 
             if (unitsToUntransform > 0) {
                 untransforms++;
-                untransformUnits[_components[i]] = unitsToUntransform;
+                untransformUnits[_setComponents[i]] = unitsToUntransform;
             }
         }
 
-        // for each transform's underlying, save the current amount of the underlying in the Set
-        // this is usually zero unless a set contains both a transformed and underlying component
-        address underlying = transformComponentsInfo[_components[i]].underlying;
+        // for each transform's underlying, save the current amount of the underlying present in
+        // the set as a normal raw component. This is usually zero unless a set contains both a 
+        // transformed and underlying component
+        address underlying = transformComponentsInfo[_setComponents[i]].underlying;
         startingUnderlyingComponentUnits[i] = _getComponentUnits(underlying)
 
         // saves rebalance parameters for later use to start rebalance through GIM when untransforming is complete
-        rebalanceParams[_components[i]].targetUnitsUnderlying = _targetUnitsUnderlying[i];
+        rebalanceParams[_setComponents[i]].targetUnitsUnderlying = _targetUnitsUnderlying[i];
         rebalanceParams.transformPercentages = _transformPercentages[i];
     }
 
-    componentList = _components;
+    setComponentList = _setComponents;
 }
 ```
 
@@ -412,7 +425,7 @@ function startIPRebalance(address[] memory _components, uint256[] memory _target
 ```solidity
 function executeUntransform(address _transformComponent, bytes _untransformData) external onlyAllowedCaller {
 
-    _absorbAirdrops();
+    _absorbAirdrop(_transformComponent);
 
     uint256 unitsToUntransform = untransformUnits[_transformComponent];
     require(unitsToUntransform > 0 && untransforms > 0, "IPRebalanceExtension: nothing to untransform");
@@ -449,23 +462,23 @@ function executeUntransform(address _transformComponent, bytes _untransformData)
 function setTradesComplete() external onlyOperator {
     tradesComplete = true;
 
-    for (uint256 i = 0; i < componentList.length; i++) {
+    for (uint256 i = 0; i < setComponentList.length; i++) {
 
-        if (_isTransformComponent(componentList[i])) {
+        if (_isTransformComponent(setComponentList[i])) {
 
-            uint256 currentUnits = _getCurrentUnits(componentList[i]);
+            uint256 currentUnits = _getCurrentUnits(setComponentList[i]);
 
             // fetches starting underlying from savedUnderlingComponent
-            uint256 startingUnderlying = startingUnderlyingComponentUnits[componentList[i]];
+            uint256 startingUnderlying = startingUnderlyingComponentUnits[setComponentList[i]];
 
             // fetches sum of all underlying units in set (including those in currently transformed positions)
             unit256 totalUnderlyingUnits = _getTotalUnderlyingUnitsInSet();
 
-            uint256 unitsToTransform = rebalanceParams[componentList[i]].transformPercentages.mul(totalUnderlyingUnits).sub(startingUnderlying);
+            uint256 unitsToTransform = rebalanceParams[setComponentList[i]].transformPercentages.mul(totalUnderlyingUnits).sub(startingUnderlying);
 
             if (unitsToTransform > 0) {
                 transforms++;
-                transformUnits[componentList[i]] = unitsToTransform;
+                transformUnits[setComponentList[i]] = unitsToTransform;
             }
         }
     }
@@ -475,7 +488,9 @@ function setTradesComplete() external onlyOperator {
 > trade(IERC20 _component, uint256 _ethQuantityLimit) external
 ``` solidity
 function trade(IERC20 _component, uint256 _ethQuantityLimit) external onlyAllowedCaller {
-    _absorbAirdrops();
+    require(!tradesComplete, "trades complete");
+    // validates that we are not trying to trade a component that has not been untransformed yet
+    _checkNotTransformedComponent(_component);
     generalIndexModule.trade(setToken, _component, _ethQuantityLimit);
 }
 ```
@@ -486,7 +501,7 @@ function executeTransform(address _transformComponent, bytes _transformData) ext
     require(tradesComplete, "IPRebalance: trades not complete");
     require(transforms > 0, "IPRebalanceExtension: nothing to transform");
 
-    _absorbAirdrops();
+    _absorbAirdrop(_transformComponent);
 
     uint256 unitsToTransform = transformUnits[_transformComponent];
     TransformInfo transformInfo = transformComponentsInfo[_transformComponent];
@@ -519,19 +534,19 @@ function executeTransform(address _transformComponent, bytes _transformData) ext
 ```solidity
 function _startGIMRebalance() internal {
     
-    uint256[] memory rebalanceTargets = new uint256[](componentList.length);
+    uint256[] memory rebalanceTargets = new uint256[](setComponentList.length);
 
-    for (uint256 i = 0; i < componentList.length; i++) {
+    for (uint256 i = 0; i < setComponentList.length; i++) {
         if (_isTransformComponent(componentsList[i])) {
-            rebalanceTargets[i] = _getCurrentUnits(componentList[i]);
+            rebalanceTargets[i] = _getCurrentUnits(setComponentList[i]);
         } else {
-            TransformInfo transformInfo = transformComponentsInfo[componentList[i]];
+            TransformInfo transformInfo = transformComponentsInfo[setComponentList[i]];
             uint256 exchangeRate = transformInfo.transformHelper.getExchangeRate(underlyingComponent, componentsList[i]);
 
             // get the sum underlying units (including those that are locked in transformed components) in the final Set's composition
-            uint256 finalUnderlyingUnits = _getFinalUnderlyingUnits(transformInfo.underlying, componentList, rebalanceParams[componentList[i]]);
+            uint256 finalUnderlyingUnits = _getFinalUnderlyingUnits(transformInfo.underlying, setComponentList, rebalanceParams[setComponentList[i]]);
 
-            uint256 startingUnderlying = startingUnderlyingComponentUnits[componentList[i]];
+            uint256 startingUnderlying = startingUnderlyingComponentUnits[setComponentList[i]];
 
             uint256 a = PreciseUnitMath.PRECISE_UNIT.preciseDiv(exchangeRate).mul(finalUnderlyingUnits)
             if (a > startingUnderlying) {
