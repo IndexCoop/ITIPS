@@ -402,13 +402,13 @@ function startIPRebalance(address[] memory _setComponents, uint256[] memory _tar
                 untransforms++;
                 untransformUnits[_setComponents[i]] = unitsToUntransform;
             }
-        }
 
-        // for each transform's underlying, save the current amount of the underlying present in
-        // the set as a normal raw component. This is usually zero unless a set contains both a 
-        // transformed and underlying component
-        address underlying = transformComponentsInfo[_setComponents[i]].underlying;
-        startingUnderlyingComponentUnits[i] = _getComponentUnits(underlying)
+            // for each transform's underlying, save the current amount of the underlying present in
+            // the set as a normal raw component. This is usually zero unless a set contains both a 
+            // transformed and underlying component
+            address underlying = transformComponentsInfo[_setComponents[i]].underlying;
+            startingUnderlyingComponentUnits[i] = _getComponentUnits(underlying);
+        }
 
         // saves rebalance parameters for later use to start rebalance through GIM when untransforming is complete
         rebalanceParams[_setComponents[i]].targetUnitsUnderlying = _targetUnitsUnderlying[i];
