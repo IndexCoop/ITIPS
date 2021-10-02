@@ -423,38 +423,46 @@ function startIPRebalance(address[] memory _setComponents, uint256[] memory _tar
 }
 ```
 
-> executeUntransform(address _transformComponent, bytes _untransformData) external
+> batchExecuteUntransform(address[] memory _transformComponents, bytes[] memory _untransformData) external
 ```solidity
-function executeUntransform(address _transformComponent, bytes _untransformData) external onlyAllowedCaller {
+function batchExecuteUntransform(address[] memory _transformComponents, bytes[] memory _untransformData) external onlyAllowedCaller {
 
-    _absorbAirdrop(_transformComponent);
+    require(_transformComponents.length == _untransformDatas.length, "length mismatch");
 
-    uint256 unitsToUntransform = untransformUnits[_transformComponent];
-    require(unitsToUntransform > 0 && untransforms > 0, "IPRebalanceExtension: nothing to untransform");
+    _absorbAirdrops(_transformComponents);
 
-    TransformInfo transformInfo = transformComponentsInfo[_transformComponent];
+    for (uint256 i = 0; i < _transformComponents.length; i++) {
 
-    require(
-        transformInfo.transformHelper.shouldUntransform(transformInfo.underlyingComponent, _transformComponent),
-        "IPRebalanceExtension: untransform unavailable"
-    );
+        address transformComponent = _transformComponents[i];
+        bytes memory untransformData = _untransformData[i]
 
-    // untransform component
-    (address module, bytes callData) = transformInfo.transformHelper.getUntransformCall(
-        setToken,
-        transformInfo.underlyingComponent,
-        _transformComponent,
-        _untransformData,
-        unitsToUntransform
-    );
-    interactManager(module, callData);
+        uint256 unitsToUntransform = untransformUnits[transformComponent];
+        require(unitsToUntransform > 0 && untransforms > 0, "IPRebalanceExtension: nothing to untransform");
 
-    untransformUnits[_transformComponent] = 0;
-    untransforms--;
+        TransformInfo transformInfo = transformComponentsInfo[transformComponent];
 
-    // if done untransforming begin the rebalance through GIM
-    if (untransforms == 0) {
-        _startGIMRebalance();
+        require(
+            transformInfo.transformHelper.shouldUntransform(transformInfo.underlyingComponent, transformComponent),
+            "IPRebalanceExtension: untransform unavailable"
+        );
+
+        // untransform component
+        (address module, bytes callData) = transformInfo.transformHelper.getUntransformCall(
+            setToken,
+            transformInfo.underlyingComponent,
+            transformComponent,
+            untransformData,
+            unitsToUntransform
+        );
+        interactManager(module, callData);
+
+        untransformUnits[transformComponent] = 0;
+        untransforms--;
+
+        // if done untransforming begin the rebalance through GIM
+        if (untransforms == 0) {
+            _startGIMRebalance();
+        }
     }
 }
 ```
@@ -497,37 +505,46 @@ function trade(IERC20 _component, uint256 _ethQuantityLimit) external onlyAllowe
 }
 ```
 
-> executeTransform(address _transformComponent, bytes _transformData) external
+> batchExecuteTransform(address _transformComponent, bytes _transformDatas) external
 ```solidity
-function executeTransform(address _transformComponent, bytes _transformData) external onlyAllowedCaller {
-    require(tradesComplete, "IPRebalance: trades not complete");
-    require(transforms > 0, "IPRebalanceExtension: nothing to transform");
+function batchExecuteTransform(address[] memory _transformComponents, bytes[] memory _transformDatas) external onlyAllowedCaller {
 
-    _absorbAirdrop(_transformComponent);
+    require(_transformComponents.length == _transformDatas.length, "length mismatch");
 
-    uint256 unitsToTransform = transformUnits[_transformComponent];
-    TransformInfo transformInfo = transformComponentsInfo[_transformComponent];
+    for (uint256 i = 0; i < _transformComponents.length; i++) {
 
-    require(
-        transformInfo.transformHelper.shouldTransform(transformInfo.underlyingComponent, _transformComponent),
-        "IPRebalanceExtension: transform unavailable"
-    );
+        address transformComponent = _transformComponents[i];
+        bytes memory transformData = _transformDatas[i];
 
-    // transform component
-    (address module, bytes callData) = transformInfo.transformHelper.getTransformCall(
-        setToken,
-        transformInfo.underlyingComponent,
-        _transformComponent,
-        _transformData,
-        unitsToTransform
-    );
-    interactManager(module, callData);
+        require(tradesComplete, "IPRebalance: trades not complete");
+        require(transforms > 0, "IPRebalanceExtension: nothing to transform");
 
-    transformUnits[_transformComponent] = 0;
-    transforms--;
+        _absorbAirdrop(transformComponent);
 
-    if (transforms == 0) {
-        tradesComplete = false;
+        uint256 unitsToTransform = transformUnits[transformComponent];
+        TransformInfo transformInfo = transformComponentsInfo[transformComponent];
+
+        require(
+            transformInfo.transformHelper.shouldTransform(transformInfo.underlyingComponent, transformComponent),
+            "IPRebalanceExtension: transform unavailable"
+        );
+
+        // transform component
+        (address module, bytes callData) = transformInfo.transformHelper.getTransformCall(
+            setToken,
+            transformInfo.underlyingComponent,
+            transformComponent,
+            transformData,
+            unitsToTransform
+        );
+        interactManager(module, callData);
+
+        transformUnits[transformComponent] = 0;
+        transforms--;
+
+        if (transforms == 0) {
+            tradesComplete = false;
+        }
     }
 }
 ```
