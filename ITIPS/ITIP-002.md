@@ -181,8 +181,8 @@ Before we move onto the implementation phase we want to make sure that we are al
 **Reviewer**: 
 
 ## Implementation
-[Link to implementation PR]()
+[Link to implementation PR](https://github.com/SetProtocol/index-coop-smart-contracts/commit/653284ed8cb52b97c2f099e598c4cc659255fc4d#diff-877652a4ec96d853d63bbbe0258a8d36c6b3d9557d6d29d4d20d8eb5e01353d6)
 ## Documentation
 [Link to Documentation on feature]()
 ## Deployment
-[Link to Deployment script PR]()
+[Link to Deployment script PR](https://github.com/SetProtocol/index-deployments/pull/80)
